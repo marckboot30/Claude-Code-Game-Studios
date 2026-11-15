@@ -1,0 +1,65 @@
+time	2026-11-15 19:49:42
+keep	lines	0	pinned	0
+checklist	L1	unlisted	-	Look: low-poly realista e desbotado, luz volumétrica; campos verde-oliva, céu nublado cinza-azulado, casas de tijolo e madeira com telhado vermelho apagado, carros enferrujados na estrada; infectados de pele cinza e roupas rasgadas; detalhe marcante: névoa baixa e o pôr do sol laranja que avisa a noite; every figure drawn, no emoji, no plain circles. *(inferred (strong), from DayZ)*	
+checklist	L2	unlisted	-	References: DayZ (o campo do leste europeu, saque de casas, vida única, fome/sede/sangramento, infectados que ouvem barulho).	
+checklist	L3	unlisted	-	View: 3D · Camera: terceira pessoa por trás do ombro, câmera orbitando com o mouse. *(inferred (strong), from DayZ)*	
+checklist	F1	unlisted	-	Mapa pequeno: praia, 2 vilas, estrada, floresta e base militar ao norte	
+checklist	F2	unlisted	-	Vida, fome, sede e sangramento visíveis, caindo devagar	
+checklist	F3	unlisted	-	Saque espalhado ao acaso nas casas a cada partida	
+checklist	F4	unlisted	-	Barulho: andar, agachar, correr, atirar e arrombar atraem infectados a distâncias diferentes	
+checklist	F5	unlisted	-	3 tipos de infectado, cada um atacando diferente: o que anda, o corredor e o soldado blindado	
+checklist	F6	unlisted	-	Combate corpo a corpo e uma pistola com munição rara (e barulhenta)	
+checklist	F7	unlisted	-	Fabricação simples: curativo, fogueira, lança improvisada	
+checklist	F8	unlisted	-	Ciclo de dia e noite curto, anoitecer em cerca de 10 minutos	
+checklist	M1	unlisted	-	1.	
+checklist	M2	unlisted	-	Você acorda na praia com uma lanterna e uma camisa; vida, fome e sede aparecem ao lado do personagem.	
+checklist	M3	unlisted	-	2.	
+checklist	M4	unlisted	-	Uma vila a 50 m; um infectado cambaleia na estrada.	
+checklist	M5	unlisted	-	3.	
+checklist	M6	unlisted	-	Você entra agachado numa casa e pega uma lata de feijão, uma garrafa d'água e um pé de cabra.	
+checklist	M7	unlisted	-	4.	
+checklist	M8	unlisted	-	Ao sair correndo, o infectado escuta e vem gritando; você o derruba com o pé de cabra mas leva um arranhão: sangrando.	
+checklist	M9	unlisted	-	5.	
+checklist	M10	unlisted	-	Rasga a camisa em curativo (Tab, fabricar); o sangramento para e a seta no horizonte mostra a base militar ao norte.	
+checklist	C1	unlisted	-	O primeiro perigo de verdade vem por volta do minuto 2-3 na primeira vila: um grupo de 3-4 infectados e um corredor que ouve se você correr.	
+checklist	C2	unlisted	-	Morrer encerra a partida e você recomeça na praia com outro saque.	
+checklist	C3	unlisted	-	Depois: vilas maiores, o anoitecer por volta do minuto 10 (menos visão, mais infectados) e a base militar cheia de infectados soldados, com o melhor saque.	
+checklist	C4	unlisted	-	*(guessed)*	
+webgl	ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)
+browser	HeadlessChrome/153.0.0.0
+console	play	2452	[.WebGL-0x358c001cf000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+scene	play	0	title
+scene	play	1	play
+digits	log	18px "Trebuchet MS", "Segoe UI", Arial, sans-serif	proportional	4.307
+digits	log	14px "Trebuchet MS", "Segoe UI", Arial, sans-serif	proportional	3.35
+digits	log	bold 20px "Trebuchet MS", "Segoe UI", Arial, sans-serif	proportional	4.902
+digits	log	bold 13px "Trebuchet MS", "Segoe UI", Arial, sans-serif	proportional	3.187
+digits	log	13px "Trebuchet MS", "Segoe UI", Arial, sans-serif	proportional	3.11
+measure	step-time	play	0.120	6.600	250
+lane	play	stop	4.2	1768
+console	play	0	[.WebGL-0x358c001cf000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+console	play	0	[.WebGL-0x358c001cf000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+console	play	0	Uncaught (in promise) NotAllowedError: A user gesture is required to request Pointer Lock.
+uncaught	play	1
+text	play	canvas	635,22,645,33	27.0	11.94	inside	N
+text	play	canvas	538,23,555,33	22.5	15.31	inside	NO
+text	play	canvas	447,22,458,34	27.0	15.31	inside	O
+text	play	canvas	824,22,831,33	27.0	15.31	inside	L
+text	play	canvas	726,23,741,32	22.5	15.31	inside	NE
+text	play	canvas	590,46,691,55	22.5	15.31	inside	Base militar  405 m
+text	play	canvas	148,16,200,25	19.5	11.91	inside	OBJETIVO
+text	play	canvas	148,31,367,43	22.5	15.29	inside	Chegue à base militar ao norte e acione o
+text	play	canvas	149,46,252,57	22.5	15.29	inside	rádio de evacuação
+text	play	canvas	1081,18,1127,30	30.0	15.29	inside	07:04
+text	play	canvas	145,370,528,383	22.5	13.57	inside	Você acordou na praia. Há uma vila ao norte: vasculhe as cas
+text	play	canvas	872,514,878,522	19.5	11.60	inside	1
+text	play	canvas	879,551,915,560	19.5	14.89	inside	Punhos
+text	play	canvas	940,514,947,522	19.5	11.93	inside	2
+text	play	canvas	960,555,970,557	19.5	15.30	inside	—
+text	play	canvas	1009,514,1016,523	19.5	11.92	inside	3
+text	play	canvas	1031,551,1037,560	19.5	15.29	inside	0
+text	play	canvas	1078,514,1085,522	19.5	11.92	inside	4
+text	play	canvas	1071,551,1135,561	19.5	15.29	inside	comer/beber
+text	play	canvas	658,538,709,546	19.5	15.32	inside	BARULHO
+screen	play	drawn
+responds	changed	4

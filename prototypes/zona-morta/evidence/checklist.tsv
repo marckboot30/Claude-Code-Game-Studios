@@ -1,0 +1,25 @@
+L1	pass	evidence/base-dusk.png	low-poly flat-shaded houses with faded red roofs, olive fields, grey-blue overcast sky, rusty cars (index.html:436), mist sprites (index.html:610), orange dusk sky in base-dusk.png; every figure drawn from boxes
+L2	pass	evidence/village.png	countryside village looting, one life (index.html:1657), hunger/thirst/bleeding (index.html:957), infected hear noise (index.html:849)
+L3	pass	evidence/play.png	3D third-person over-the-shoulder camera orbiting with mouse/arrows (index.html:1460)
+F1	pass	index.html:568	beach, Vila Nova, road, forest, Pedra Alta and fenced military base to the north
+F2	pass	evidence/play.png	health, hunger and thirst bars beside the survivor; bleeding drops shown when wounded (index.html:957)
+F3	pass	index.html:819	each loot spot rolls from a seeded table per run; restart reseeds (runs++)
+F4	pass	index.html:849	footsteps by stance, melee, gunshot, forcing/kicking doors and thrown cans emit noise radii from config.js
+F5	pass	evidence/figures.png	walker (slow, reaching), runner (fast, hunched, hears farther), armoured soldier (slow, heavy hits, halves melee damage)
+F6	pass	index.html:990	fists/crowbar/axe/spear melee and a pistol using scarce 9mm that makes a 70 m noise
+F7	pass	evidence/inventory.png	bandage from rags, campfire from sticks and matches, improvised spear, plus tearing a shirt and roasting a potato
+F8	pass	evidence/night.png	clock starts 07:00, dusk at 19:00 after 10 real minutes (index.html:863), night darkens with flashlight
+M1	pass	index.html:813	numbering of the first-minute steps
+M2	pass	evidence/inventory.png	starts on the beach with a flashlight and a shirt; needs bars beside the survivor
+M3	pass	index.html:827	numbering of the first-minute steps
+M4	pass	evidence/play.png	first village about 40 m up the road; a walker spawns on the road (index.html:827)
+M5	pass	index.html:570	numbering of the first-minute steps
+M6	pass	index.html:570	first house holds beans, a water bottle and a crowbar every run; C crouches
+M7	pass	index.html:977	numbering of the first-minute steps
+M8	pass	index.html:977	sprinting is heard at 22 m, the infected screams and chases, a hit can open a bleeding wound
+M9	pass	index.html:767	numbering of the first-minute steps
+M10	pass	evidence/inventory.png	Tab: tear shirt into rags, rags into a bandage; key 3 stops bleeding; compass marker points to the base
+C1	pass	index.html:827	3 walkers and a runner in the middle of Vila Nova, a few minutes from the beach
+C2	pass	index.html:1657	death ends the run; R restarts on the beach with a new seed and new loot
+C3	pass	index.html:1103	bigger second village, night wanderers after dusk, infected soldiers at the base with military loot
+C4	pass	index.html:827	guessed marker on the Challenge section
