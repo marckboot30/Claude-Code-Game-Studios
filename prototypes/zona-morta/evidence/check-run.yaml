@@ -1,0 +1,142 @@
+# The one-shot's small check (check-run/1).
+# Written by one-shot-check.sh --record: the results are /prototype's reading of
+# evidence/self-check.tsv; never edited by hand.
+kind: check-run/1
+engine: web
+browser: "HeadlessChrome/153.0.0.0"
+time: "2026-11-15 19:49:42"
+checks:
+  - id: boots
+    result: not_run
+    mark: not assessed
+    why: "the round's run showed 1 uncaught (pointer lock refused headless); fixed, and one-shot-run.sh after the fix shows uncaught 0, but the check refuses a third run"
+    evidence:
+      - "evidence/self-check.tsv"
+  - id: shot
+    result: not_run
+    mark: not assessed
+    why: "the check's headless Chrome gave no picture of this software-WebGL page; evidence/play.png was taken with the preinstalled Playwright Chromium and looked at"
+    evidence:
+  - id: outlines
+    result: pass
+    evidence:
+      - "evidence/figures.png"
+  - id: brief-words
+    result: pass
+    evidence:
+      - "evidence/brief-words.tsv"
+  - id: emoji
+    result: pass
+    evidence:
+      - "evidence/self-check.tsv"
+  - id: nearest-game
+    result: pass
+    evidence:
+      - "evidence/nearest-game.txt"
+brief_checklist:
+  - id: L1
+    result: pass
+    evidence: "evidence/base-dusk.png"
+    item: "Look: low-poly realista e desbotado, luz volumétrica; campos verde-oliva, céu nublado cinza-azulado, casas de tijolo e madeira com telhado vermelho apagado, carros enferrujados na estrada; infectados de pele cinza e roupas rasgadas; detalhe marcante: névoa baixa e o pôr do sol laranja que avisa a noite; every figure drawn, no emoji, no plain circles. *(inferred (strong), from DayZ)*"
+  - id: L2
+    result: pass
+    evidence: "evidence/village.png"
+    item: "References: DayZ (o campo do leste europeu, saque de casas, vida única, fome/sede/sangramento, infectados que ouvem barulho)."
+  - id: L3
+    result: pass
+    evidence: "evidence/play.png"
+    item: "View: 3D · Camera: terceira pessoa por trás do ombro, câmera orbitando com o mouse. *(inferred (strong), from DayZ)*"
+  - id: F1
+    result: pass
+    evidence: "index.html:568"
+    item: "Mapa pequeno: praia, 2 vilas, estrada, floresta e base militar ao norte"
+  - id: F2
+    result: pass
+    evidence: "evidence/play.png"
+    item: "Vida, fome, sede e sangramento visíveis, caindo devagar"
+  - id: F3
+    result: pass
+    evidence: "index.html:819"
+    item: "Saque espalhado ao acaso nas casas a cada partida"
+  - id: F4
+    result: pass
+    evidence: "index.html:849"
+    item: "Barulho: andar, agachar, correr, atirar e arrombar atraem infectados a distâncias diferentes"
+  - id: F5
+    result: pass
+    evidence: "evidence/figures.png"
+    item: "3 tipos de infectado, cada um atacando diferente: o que anda, o corredor e o soldado blindado"
+  - id: F6
+    result: pass
+    evidence: "index.html:990"
+    item: "Combate corpo a corpo e uma pistola com munição rara (e barulhenta)"
+  - id: F7
+    result: pass
+    evidence: "evidence/inventory.png"
+    item: "Fabricação simples: curativo, fogueira, lança improvisada"
+  - id: F8
+    result: pass
+    evidence: "evidence/night.png"
+    item: "Ciclo de dia e noite curto, anoitecer em cerca de 10 minutos"
+  - id: M1
+    result: pass
+    evidence: "index.html:813"
+    item: "1."
+  - id: M2
+    result: pass
+    evidence: "evidence/inventory.png"
+    item: "Você acorda na praia com uma lanterna e uma camisa; vida, fome e sede aparecem ao lado do personagem."
+  - id: M3
+    result: pass
+    evidence: "index.html:827"
+    item: "2."
+  - id: M4
+    result: pass
+    evidence: "evidence/play.png"
+    item: "Uma vila a 50 m; um infectado cambaleia na estrada."
+  - id: M5
+    result: pass
+    evidence: "index.html:570"
+    item: "3."
+  - id: M6
+    result: pass
+    evidence: "index.html:570"
+    item: "Você entra agachado numa casa e pega uma lata de feijão, uma garrafa d'água e um pé de cabra."
+  - id: M7
+    result: pass
+    evidence: "index.html:977"
+    item: "4."
+  - id: M8
+    result: pass
+    evidence: "index.html:977"
+    item: "Ao sair correndo, o infectado escuta e vem gritando; você o derruba com o pé de cabra mas leva um arranhão: sangrando."
+  - id: M9
+    result: pass
+    evidence: "index.html:767"
+    item: "5."
+  - id: M10
+    result: pass
+    evidence: "evidence/inventory.png"
+    item: "Rasga a camisa em curativo (Tab, fabricar); o sangramento para e a seta no horizonte mostra a base militar ao norte."
+  - id: C1
+    result: pass
+    evidence: "index.html:827"
+    item: "O primeiro perigo de verdade vem por volta do minuto 2-3 na primeira vila: um grupo de 3-4 infectados e um corredor que ouve se você correr."
+  - id: C2
+    result: pass
+    evidence: "index.html:1657"
+    item: "Morrer encerra a partida e você recomeça na praia com outro saque."
+  - id: C3
+    result: pass
+    evidence: "index.html:1103"
+    item: "Depois: vilas maiores, o anoitecer por volta do minuto 10 (menos visão, mais infectados) e a base militar cheia de infectados soldados, com o melhor saque."
+  - id: C4
+    result: pass
+    evidence: "index.html:827"
+    item: "*(guessed)*"
+measures:
+  - id: step-time
+    value: 6.600
+    unit: ms
+    by: browser
+    detail: "mean 0.120 ms, slowest 6.600 ms, 250 steps"
