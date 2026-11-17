@@ -5,6 +5,7 @@
 // code, in clean isometric pixel art (2:1 tiles of 32x16, 1px dark outline, no smoothing).
 'use strict';
 
+const AR = 2; // art resolution: every world picture is drawn with 2x2 the pixels of the 1x design, so the squares are small
 const TW = 32, TH = 16, WALL_H = 30, CUT_H = 5, WT = 0.16;
 const OUTLINE = '#14161c';
 
@@ -42,7 +43,7 @@ function pdisc(c, cx, cy, r, col, sy = 1) { for (let y = -r; y <= r; y++) { cons
 function hash2(x, y, s = 0) { let h = (x * 374761393 + y * 668265263 + s * 2147483647) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 
 // iso projection on a local canvas with origin (ox, oy) = world (0,0,0)
-function L(ox, oy) { return (i, j, z = 0) => [ox + (i - j) * 16, oy + (i + j) * 8 - z]; }
+function L(ox, oy) { return (i, j, z = 0) => [ox + (i - j) * 16 * AR, oy + (i + j) * 8 * AR - z * AR]; } // heights z stay in 1x units
 
 // a solid box from (i,j) of size (w,d) and height h, lifted by z0; outlined
 function pbox(c, P, i, j, w, d, h, z0, cT, cL, cR, ol = OUTLINE) {
@@ -70,6 +71,26 @@ function outlineCanvas(cv, col = OUTLINE) { // 1px outline around every opaque p
   x.fillStyle = col; for (let k = 0; k < add.length; k += 2) x.fillRect(add[k], add[k + 1], 1, 1);
   return cv;
 }
+
+// a 1x sprite becomes a 2x one with smoothed diagonals (EPX), then gets its thin outline
+function epx(src) {
+  const w = src.width, h = src.height, s = src.getContext('2d').getImageData(0, 0, w, h).data;
+  const out = mkCanvas(w * 2, h * 2), oc = out.getContext('2d'), od = oc.createImageData(w * 2, h * 2), d = od.data;
+  const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? -1 : (y * w + x) * 4;
+  const same = (a, b) => { const ta = a < 0 || s[a + 3] === 0, tb = b < 0 || s[b + 3] === 0; if (ta || tb) return ta && tb; return s[a] === s[b] && s[a + 1] === s[b + 1] && s[a + 2] === s[b + 2]; };
+  const put = (x, y, q) => { const k = (y * w * 2 + x) * 4; if (q < 0) return; d[k] = s[q]; d[k + 1] = s[q + 1]; d[k + 2] = s[q + 2]; d[k + 3] = s[q + 3]; };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const P = at(x, y), A = at(x, y - 1), B = at(x + 1, y), C = at(x - 1, y), D = at(x, y + 1);
+    let p1 = P, p2 = P, p3 = P, p4 = P;
+    if (same(C, A) && !same(C, D) && !same(A, B)) p1 = A;
+    if (same(A, B) && !same(A, C) && !same(B, D)) p2 = B;
+    if (same(D, C) && !same(D, B) && !same(C, A)) p3 = C;
+    if (same(B, D) && !same(B, A) && !same(D, C)) p4 = D;
+    put(2 * x, 2 * y, p1); put(2 * x + 1, 2 * y, p2); put(2 * x, 2 * y + 1, p3); put(2 * x + 1, 2 * y + 1, p4);
+  }
+  oc.putImageData(od, 0, 0); return out;
+}
+function finishSprite(c) { const big = AR === 2 ? epx(c) : c; outlineCanvas(big); return big; }
 
 // ---- bitmap font 3x5 (accents dropped) --------------------------------------------------------
 const FONT3 = { A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110', E: '111100110100111', F: '111100110100100', G: '011100101101011', H: '101101111101101', I: '111010010010111', J: '001001001101010', K: '101101110101101', L: '100100100100111', M: '101111111101101', N: '110101101101101', O: '010101101101010', P: '110101110100100', Q: '010101101110011', R: '110101110101101', S: '011100010001110', T: '111010010010010', U: '101101101101111', V: '101101101101010', W: '101101111111101', X: '101101010101101', Y: '101101010010010', Z: '111001010100111',
@@ -101,9 +122,9 @@ const FLOOR_SOLID = { agua: true };
 const floorCache = {};
 function floorImg(type, v) {
   const key = type + v; if (floorCache[key]) return floorCache[key];
-  const c = mkCanvas(32, 16), x = c.getContext('2d');
+  const c = mkCanvas(32 * AR, 16 * AR), x = c.getContext('2d');
   const bases = FLOOR_BASE[type] || ['#f0f'], base = bases[v % bases.length];
-  const dia = [[16, 0], [32, 8], [16, 16], [0, 8]];
+  const dia = [[16 * AR, 0], [32 * AR, 8 * AR], [16 * AR, 16 * AR], [0, 8 * AR]];
   const f = (px, py) => {
     const n = hash2(px + v * 31, py + v * 17, type.length);
     switch (type) {
@@ -111,9 +132,9 @@ function floorImg(type, v) {
       case 'terra': case 'terraRua': return n < 0.03 ? '#705a3e' : n < 0.05 ? '#867050' : base;
       case 'campo': return ((py - px * 0.5 + 64) % 4 < 1.5) ? '#5a4428' : (n < 0.05 ? '#7d6a40' : base);
       case 'asfalto': return n < 0.03 ? '#484b52' : n < 0.05 ? '#53565e' : base;
-      case 'faixaV': { const on = Math.abs((px - 16) - (py - 8) * -2) < 1.6 && (py < 6 || py > 10); return on ? '#d8d0a0' : base; }
-      case 'faixaH': { const on = Math.abs((px - 16) - (py - 8) * 2) < 1.6 && (py < 6 || py > 10); return on ? '#d8d0a0' : base; }
-      case 'calcada': return (px === 16 || (py === 8)) ? '#8c8c86' : base;
+      case 'faixaV': { const on = Math.abs((px - 16 * AR) - (py - 8 * AR) * -2) < 1.6 * AR && (py < 6 * AR || py > 10 * AR); return on ? '#d8d0a0' : base; }
+      case 'faixaH': { const on = Math.abs((px - 16 * AR) - (py - 8 * AR) * 2) < 1.6 * AR && (py < 6 * AR || py > 10 * AR); return on ? '#d8d0a0' : base; }
+      case 'calcada': return (px === 16 * AR || (py === 8 * AR)) ? '#8c8c86' : base;
       case 'madeira': { const r = ((py - px * 0.5) % 4 + 4) % 4; return r < 1 ? '#6e4626' : (n < 0.04 ? '#8c6038' : base); }
       case 'azulejo': { const a = ((py - px * 0.5) % 8 + 8) % 8, b = ((py + px * 0.5) % 8 + 8) % 8; return (a < 1 || b < 1) ? '#b8b4a8' : base; }
       case 'hosp': { const a = ((py - px * 0.5) % 8 + 8) % 8, b = ((py + px * 0.5) % 8 + 8) % 8; return (a < 1 || b < 1) ? '#b4c2c8' : base; }
@@ -162,7 +183,7 @@ const WOX = 18;
 function wallImg(dir, face, faceKey, h, feature, st, cap, barr) {
   const key = [dir, faceKey, h, feature, st, cap, barr].join('|');
   if (wallCache[key]) return wallCache[key];
-  const c = mkCanvas(36, h + 16), x = c.getContext('2d'), P = L(WOX, h + 3);
+  const c = mkCanvas(36 * AR, (h + 16) * AR), x = c.getContext('2d'), P = L(WOX * AR, (h + 3) * AR);
   const side = typeof face === 'string' ? shade(face, 0.8) : '#5a4a40';
   const seg = (u0, u1, z0, z1) => { // a piece of the wall between u0..u1 along it, from z0 to z1
     if (dir === 'V') pbox(x, P, -WT / 2, u0, WT, u1 - u0, z1 - z0, z0, cap, side, face);
@@ -177,7 +198,7 @@ function wallImg(dir, face, faceKey, h, feature, st, cap, barr) {
       if (dir === 'V') pbox(x, P, WT / 2, 0.1, 0.62, 0.08, 20, 0, '#5a3a20', '#8a5a32', '#6e4626');
       else pbox(x, P, 0.1, WT / 2, 0.08, 0.62, 20, 0, '#5a3a20', '#8a5a32', '#6e4626');
     }
-    if (st === 'broken') for (let k = 0; k < 4; k++) { const p = dir === 'V' ? P(0.3 + k * 0.1, 0.25 + k * 0.15, 0) : P(0.25 + k * 0.15, 0.3 + k * 0.1, 0); prect(x, p[0], p[1], 3, 1, '#6e4626'); }
+    if (st === 'broken') for (let k = 0; k < 4; k++) { const p = dir === 'V' ? P(0.3 + k * 0.1, 0.25 + k * 0.15, 0) : P(0.25 + k * 0.15, 0.3 + k * 0.1, 0); prect(x, p[0], p[1], 3 * AR, AR, '#6e4626'); }
   } else {
     seg(0, 1, 0, h);
     if (feature === 'door' && !cut) { quad(0.18, 0.82, 0, 21, '#6e4626'); quad(0.22, 0.78, 2, 19, '#8a5a32'); const k = dir === 'V' ? P(WT / 2, 0.7, 10) : P(0.7, WT / 2, 10); prect(x, k[0], k[1], 1, 1, '#e0c060'); }
@@ -194,19 +215,19 @@ function wallImg(dir, face, faceKey, h, feature, st, cap, barr) {
     for (let k = 0; k < barr; k++) {
       const [za, zb] = zs[k];
       const a = dir === 'V' ? P(WT / 2 + 0.02, 0.05, za) : P(0.05, WT / 2 + 0.02, za), b = dir === 'V' ? P(WT / 2 + 0.02, 0.95, zb) : P(0.95, WT / 2 + 0.02, zb);
-      pline(x, a[0], a[1], b[0], b[1], '#3a2614'); pline(x, a[0], a[1] - 1, b[0], b[1] - 1, '#b8884e'); pline(x, a[0], a[1] - 2, b[0], b[1] - 2, '#a0703c'); pline(x, a[0], a[1] - 3, b[0], b[1] - 3, '#3a2614');
+      const cols = ['#3a2614', '#b8884e', '#b8884e', '#a0703c', '#a0703c', '#8a6034', '#3a2614']; for (let q = 0; q < (AR === 2 ? 7 : 4); q++) pline(x, a[0], a[1] - q, b[0], b[1] - q, AR === 2 ? cols[q] : ['#3a2614', '#b8884e', '#a0703c', '#3a2614'][q]);
     }
   }
-  const r = { c, ox: WOX, oy: h + 3 }; wallCache[key] = r; return r;
+  const r = { c, ox: WOX * AR, oy: (h + 3) * AR }; wallCache[key] = r; return r;
 }
 const fenceCache = {};
 function fenceImg(dir) {
   if (fenceCache[dir]) return fenceCache[dir];
-  const c = mkCanvas(36, 30), x = c.getContext('2d'), P = L(WOX, 20);
+  const c = mkCanvas(36 * AR, 30 * AR), x = c.getContext('2d'), P = L(WOX * AR, 20 * AR);
   const post = (u) => dir === 'V' ? pbox(x, P, -0.06, u - 0.06, 0.12, 0.12, 12, 0, '#8a6a44', '#6e5234', '#5a4228') : pbox(x, P, u - 0.06, -0.06, 0.12, 0.12, 12, 0, '#8a6a44', '#6e5234', '#5a4228');
   const rail = (z) => dir === 'V' ? pbox(x, P, -0.03, 0, 0.06, 1, 1, z, '#a0805a', '#7e6040', '#a0805a', null) : pbox(x, P, 0, -0.03, 1, 0.06, 1, z, '#a0805a', '#a0805a', '#7e6040', null);
   post(0.06); rail(4); rail(9); post(0.94);
-  const r = { c, ox: WOX, oy: 20 }; fenceCache[dir] = r; return r;
+  const r = { c, ox: WOX * AR, oy: 20 * AR }; fenceCache[dir] = r; return r;
 }
 
 // ---- roofs: one piece per footprint tile, a hip roof over the building rectangle -------------
@@ -215,7 +236,7 @@ const roofCache = {};
 function roofH(b, i, j) { const m = Math.min(i - b.x0, b.x1 - i, j - b.y0, b.y1 - j); return Math.min(m, b.ridge) * b.slope; }
 function roofImg(b, i, j) {
   const key = b.id + ':' + i + ',' + j; if (roofCache[key]) return roofCache[key];
-  const c = mkCanvas(36, 64), x = c.getContext('2d'), oy = 50, P = (a, bb, z) => [WOX + (a - i - (bb - j)) * 16, oy + (a - i + bb - j) * 8 - z];
+  const c = mkCanvas(36 * AR, 64 * AR), x = c.getContext('2d'), oy = 50 * AR, P = (a, bb, z) => [WOX * AR + (a - i - (bb - j)) * 16 * AR, oy + (a - i + bb - j) * 8 * AR - z * AR];
   const cols = ROOF[b.roof] || ROOF.telha; // N, W, E, S
   const z = (a, bb) => WALL_H + roofH(b, a, bb);
   const ctr = [i + 0.5, j + 0.5];
@@ -232,7 +253,7 @@ function roofImg(b, i, j) {
   const ol = (a1, b1, a2, b2) => { const p = P(a1, b1, z(a1, b1)), q = P(a2, b2, z(a2, b2)); pline(x, p[0], p[1], q[0], q[1], OUTLINE); };
   if (i === b.x0) ol(i, j, i, j + 1); if (i === b.x1 - 1) ol(i + 1, j, i + 1, j + 1);
   if (j === b.y0) ol(i, j, i + 1, j); if (j === b.y1 - 1) ol(i, j + 1, i + 1, j + 1);
-  const r = { c, ox: WOX, oy }; roofCache[key] = r; return r;
+  const r = { c, ox: WOX * AR, oy }; roofCache[key] = r; return r;
 }
 
 // ---- furniture and props -----------------------------------------------------------------------
@@ -240,7 +261,7 @@ const furnCache = {};
 const FOX = 32, FOY = 52;
 function furnImg(type, v = 0, st = '') {
   const key = type + '|' + v + '|' + st; if (furnCache[key]) return furnCache[key];
-  let c = mkCanvas(64, 72), x = c.getContext('2d'), P = L(FOX, FOY), ox = FOX, oy = FOY;
+  let c = mkCanvas(64 * AR, 72 * AR), x = c.getContext('2d'), P = L(FOX * AR, FOY * AR), ox = FOX * AR, oy = FOY * AR;
   const wood = ['#9a6a3c', '#7c5230', '#64421f'], dk = ['#3a3e48', '#4a4e58', '#2e3038'];
   switch (type) {
     case 'cama': { const bl = ['#3a5a9a', '#9a3a4a', '#4a7a4a', '#7a5a9a'][v % 4]; pbox(x, P, 0.12, 0.1, 0.76, 0.8, 5, 0, bl, '#5a5048', '#463e38'); pbox(x, P, 0.16, 0.12, 0.68, 0.22, 2, 5, '#eef0f2', '#c8ccd2', '#aeb2ba'); faceS(x, P, 0.12, 0.9, 0, 0.76, 1, 4, shade(bl, 0.8)); break; }
@@ -251,38 +272,41 @@ function furnImg(type, v = 0, st = '') {
     case 'balcao': pbox(x, P, 0.05, 0.25, 0.9, 0.55, 10, 0, '#cfd3d8', '#e6e8ea', '#b8bcc2'); faceS(x, P, 0.05, 0.8, 0.45, 0.47, 1, 8, '#9aa0a8'); break;
     case 'pia': pbox(x, P, 0.05, 0.25, 0.9, 0.55, 10, 0, '#cfd3d8', '#e6e8ea', '#b8bcc2'); pbox(x, P, 0.3, 0.35, 0.4, 0.3, 0, 10, '#7a8a98', '#7a8a98', '#7a8a98', null); pbox(x, P, 0.48, 0.3, 0.06, 0.06, 4, 10, '#a0a6ae', '#a0a6ae', '#80868e'); break;
     case 'geladeira': pbox(x, P, 0.2, 0.25, 0.6, 0.55, 28, 0, '#f4f6f8', '#dfe3e8', '#c4c9d0'); faceS(x, P, 0.2, 0.8, 0.02, 0.58, 18, 19, '#9aa0a8'); faceS(x, P, 0.2, 0.8, 0.5, 0.53, 10, 16, '#9aa0a8'); break;
-    case 'fogao': pbox(x, P, 0.15, 0.25, 0.7, 0.55, 11, 0, '#e8eaee', '#d0d4da', '#b0b4ba'); for (const [a, bb] of [[0.3, 0.38], [0.6, 0.38], [0.3, 0.65], [0.6, 0.65]]) { const p = P(a, bb, 11); prect(x, p[0] - 1, p[1], 3, 1, '#22242a'); } faceS(x, P, 0.15, 0.8, 0.1, 0.6, 2, 7, '#4a4e58'); break;
+    case 'fogao': pbox(x, P, 0.15, 0.25, 0.7, 0.55, 11, 0, '#e8eaee', '#d0d4da', '#b0b4ba'); for (const [a, bb] of [[0.3, 0.38], [0.6, 0.38], [0.3, 0.65], [0.6, 0.65]]) { const p = P(a, bb, 11); prect(x, p[0] - AR, p[1], 3 * AR, AR, '#22242a'); } faceS(x, P, 0.15, 0.8, 0.1, 0.6, 2, 7, '#4a4e58'); break;
     case 'mesa': pbox(x, P, 0.15, 0.15, 0.7, 0.7, 2, 8, ...wood); for (const [a, bb] of [[0.18, 0.78], [0.78, 0.78], [0.78, 0.18]]) pbox(x, P, a, bb, 0.05, 0.05, 8, 0, ...wood, null); break;
     case 'cadeira': pbox(x, P, 0.3, 0.3, 0.4, 0.4, 2, 5, '#30333c', '#262830', '#1c1e24'); pbox(x, P, 0.3, 0.3, 0.4, 0.07, 10, 5, '#30333c', '#262830', '#1c1e24'); break;
     case 'sofa': { const f = ['#7a4a3a', '#4a5a7a', '#5a6a4a'][v % 3]; pbox(x, P, 0.1, 0.25, 0.8, 0.6, 6, 0, f, shade(f, 0.85), shade(f, 0.7)); pbox(x, P, 0.1, 0.25, 0.8, 0.18, 12, 0, shade(f, 1.1), shade(f, 0.9), shade(f, 0.75)); pbox(x, P, 0.1, 0.25, 0.12, 0.6, 9, 0, shade(f, 1.1), shade(f, 0.9), shade(f, 0.75)); break; }
     case 'tv': pbox(x, P, 0.2, 0.3, 0.6, 0.45, 7, 0, ...wood); pbox(x, P, 0.25, 0.42, 0.5, 0.15, 12, 7, '#22242a', '#1a1c20', '#2a2c32'); faceS(x, P, 0.27, 0.57, 0.04, 0.46, 9, 17, st === 'on' ? '#7ab8e8' : '#30343c'); if (st === 'on') faceS(x, P, 0.27, 0.57, 0.1, 0.25, 11, 15, '#c8e4f8'); break;
-    case 'radio': pbox(x, P, 0.25, 0.3, 0.5, 0.45, 8, 0, ...wood); pbox(x, P, 0.32, 0.4, 0.36, 0.2, 6, 8, '#5a3a28', '#4a2e1e', '#3a2416'); faceS(x, P, 0.32, 0.6, 0.06, 0.2, 9, 13, '#c8b890'); { const p = P(0.65, 0.45, 14); pline(x, p[0], p[1], p[0] + 5, p[1] - 8, '#b8bcc2'); } if (st === 'on') { const p = P(0.55, 0.6, 12); prect(x, p[0], p[1], 2, 1, '#e84040'); } break;
+    case 'radio': pbox(x, P, 0.25, 0.3, 0.5, 0.45, 8, 0, ...wood); pbox(x, P, 0.32, 0.4, 0.36, 0.2, 6, 8, '#5a3a28', '#4a2e1e', '#3a2416'); faceS(x, P, 0.32, 0.6, 0.06, 0.2, 9, 13, '#c8b890'); { const p = P(0.65, 0.45, 14); pline(x, p[0], p[1], p[0] + 5 * AR, p[1] - 8 * AR, '#b8bcc2'); } if (st === 'on') { const p = P(0.55, 0.6, 12); prect(x, p[0], p[1], 2 * AR, AR, '#e84040'); } break;
     case 'estante': pbox(x, P, 0.1, 0.35, 0.8, 0.35, 26, 0, ...wood); for (let r = 0; r < 4; r++) for (let k = 0; k < 7; k++) { const col = ['#a83a3a', '#3a6aa8', '#d8b040', '#3a8a5a', '#8a4aa8', '#e8e0d0'][(k * 3 + r * 5 + v) % 6]; faceS(x, P, 0.1, 0.7, 0.06 + k * 0.11, 0.14 + k * 0.11, 2 + r * 6, 6 + r * 6 - (k % 2), col); } break;
     case 'escrivaninha': pbox(x, P, 0.1, 0.2, 0.8, 0.55, 9, 0, ...wood); pbox(x, P, 0.3, 0.28, 0.32, 0.12, 8, 9, '#2a2c34', '#3a3e48', '#24262e'); break;
     case 'prateleira': for (let z = 0; z <= 18; z += 6) pbox(x, P, 0.1, 0.25, 0.8, 0.5, 1, z, '#5a5e68', '#5a5e68', '#40444c'); for (const [a, bb] of [[0.1, 0.7], [0.85, 0.7], [0.85, 0.25]]) pbox(x, P, a, bb, 0.05, 0.05, 20, 0, ...dk, null); for (let z = 1; z <= 13; z += 6) pbox(x, P, 0.2 + (z % 4) * 0.1, 0.3, 0.3, 0.35, 4, z, ['#c8a050', '#7a8a5a', '#b04030'][(z + v) % 3], '#9a7a40', '#7a5a30'); break;
     case 'caixote': pbox(x, P, 0.15, 0.15, 0.7, 0.7, 10, 0, '#b88a54', '#9a7040', '#7e5a32'); faceS(x, P, 0.15, 0.85, 0, 0.7, 5, 6, '#6e4a26'); faceE(x, P, 0.85, 0.15, 0, 0.7, 5, 6, '#5a3c1e'); break;
     case 'remedios': pbox(x, P, 0.2, 0.3, 0.6, 0.4, 20, 0, '#f0f2f4', '#dce0e4', '#c0c6cc'); faceS(x, P, 0.2, 0.7, 0.22, 0.38, 10, 15, '#d83838'); faceS(x, P, 0.2, 0.7, 0.27, 0.33, 8, 17, '#d83838'); break;
-    case 'bomba': pbox(x, P, 0.3, 0.3, 0.4, 0.4, 22, 0, '#e8e8e0', '#c9302c', '#9a2420'); faceS(x, P, 0.3, 0.7, 0.08, 0.32, 14, 19, '#22242a'); faceS(x, P, 0.3, 0.7, 0.1, 0.3, 15, 18, st === 'on' ? '#7ae87a' : '#3a5a3a'); { const p = P(0.7, 0.55, 12); pline(x, p[0], p[1], p[0] + 4, p[1] + 6, '#22242a'); } break;
+    case 'bomba': pbox(x, P, 0.3, 0.3, 0.4, 0.4, 22, 0, '#e8e8e0', '#c9302c', '#9a2420'); faceS(x, P, 0.3, 0.7, 0.08, 0.32, 14, 19, '#22242a'); faceS(x, P, 0.3, 0.7, 0.1, 0.3, 15, 18, st === 'on' ? '#7ae87a' : '#3a5a3a'); { const p = P(0.7, 0.55, 12); pline(x, p[0], p[1], p[0] + 4 * AR, p[1] + 6 * AR, '#22242a'); } break;
     case 'arvore': {
-      c = mkCanvas(64, 96); x = c.getContext('2d'); ox = 32; oy = 84; const Q = L(32, 84);
+      c = mkCanvas(64 * AR, 96 * AR); x = c.getContext('2d'); ox = 32 * AR; oy = 84 * AR; const Q = L(32 * AR, 84 * AR);
       pbox(x, Q, 0.42, 0.42, 0.16, 0.16, 18, 0, '#5a3a22', '#6e4a2c', '#4e321c');
       const cy = 84 - 34 - (v % 3) * 3, gr = [['#3e5a2a', '#4e6e34', '#6a8a44'], ['#4a5a2a', '#5e7038', '#7a8c48'], ['#355028', '#446632', '#5c8040']][v % 3];
-      const blob = (bx, by, r, col) => pdisc(x, bx, by, r, col, 0.85);
+      const blob = (bx, by, r, col) => pdisc(x, bx * AR, by * AR, r * AR, col, 0.85);
+      // leaves: small lighter and darker clusters over the crown, for texture
+      const leaves = (n, col, cx0, cy0, rr) => { for (let q = 0; q < n; q++) { const a = hash2(q, v, 7) * Math.PI * 2, d = Math.sqrt(hash2(v, q, 9)) * rr; pdisc(x, Math.round((cx0 + Math.cos(a) * d) * AR), Math.round((cy0 + Math.sin(a) * d * 0.8) * AR), AR, col, 1); } };
       blob(32, cy + 4, 13, gr[0]); blob(26, cy, 9, gr[0]); blob(38, cy - 1, 9, gr[0]);
       blob(30, cy, 10, gr[1]); blob(36, cy - 4, 7, gr[1]); blob(25, cy - 3, 6, gr[1]);
       blob(28, cy - 6, 4, gr[2]); blob(35, cy - 8, 3, gr[2]);
+      leaves(26, shade(gr[0], 0.8), 32, cy + 2, 11); leaves(22, gr[2], 30, cy - 3, 8); leaves(10, shade(gr[2], 1.15), 31, cy - 6, 5);
       outlineCanvas(c); break;
     }
     case 'toco': pbox(x, P, 0.38, 0.38, 0.24, 0.24, 4, 0, '#c8a070', '#6e4a2c', '#4e321c'); break;
-    case 'arbusto': { const p = P(0.5, 0.5, 0); pdisc(x, p[0], p[1] - 5, 7, '#3e5a2a', 0.7); pdisc(x, p[0] - 2, p[1] - 7, 4, '#567a36', 0.7); outlineCanvas(c); break; }
+    case 'arbusto': { const p = P(0.5, 0.5, 0); pdisc(x, p[0], p[1] - 5 * AR, 7 * AR, '#3e5a2a', 0.7); pdisc(x, p[0] - 2 * AR, p[1] - 7 * AR, 4 * AR, '#567a36', 0.7); for (let q = 0; q < 14; q++) pdisc(x, p[0] + Math.round((hash2(q, v) - 0.5) * 10 * AR), p[1] - Math.round((4 + hash2(v, q) * 5) * AR), 1, q % 2 ? '#6a8a44' : '#304a22', 1); outlineCanvas(c); break; }
     case 'feno': pbox(x, P, 0.15, 0.2, 0.7, 0.6, 9, 0, '#e0c060', '#c8a848', '#a88a38'); for (let z = 2; z < 9; z += 3) faceS(x, P, 0.15, 0.8, 0.05, 0.65, z, z + 1, '#a88a38'); break;
     case 'cocho': pbox(x, P, 0.08, 0.3, 0.84, 0.4, 5, 0, '#8a6a44', '#6e5234', '#5a4228'); if (st) pbox(x, P, 0.12, 0.34, 0.76, 0.32, 0, 5, st === 'agua' ? '#5aa0d8' : st === 'ambos' ? '#9ab070' : '#d8c060', '#000', '#000', null); break;
-    case 'gerador': pbox(x, P, 0.2, 0.25, 0.6, 0.5, 11, 0, '#e8c040', '#c8a030', '#a88020'); faceS(x, P, 0.2, 0.75, 0.1, 0.45, 3, 8, '#3a3c42'); pbox(x, P, 0.62, 0.3, 0.08, 0.08, 5, 11, '#4a4c52', '#3a3c42', '#2a2c30'); if (st === 'on') { const p = P(0.5, 0.75, 6); prect(x, p[0], p[1], 2, 1, '#7ae87a'); } break;
-    case 'fogueira': { for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2, p = P(0.5 + Math.cos(a) * 0.3, 0.5 + Math.sin(a) * 0.3, 0); prect(x, p[0] - 1, p[1] - 2, 3, 2, '#8a8e94'); } pbox(x, P, 0.3, 0.45, 0.4, 0.1, 2, 0, '#7a5230', '#5a3a20', '#4a2e18'); pbox(x, P, 0.45, 0.3, 0.1, 0.4, 2, 1, '#7a5230', '#5a3a20', '#4a2e18'); break; }
+    case 'gerador': pbox(x, P, 0.2, 0.25, 0.6, 0.5, 11, 0, '#e8c040', '#c8a030', '#a88020'); faceS(x, P, 0.2, 0.75, 0.1, 0.45, 3, 8, '#3a3c42'); pbox(x, P, 0.62, 0.3, 0.08, 0.08, 5, 11, '#4a4c52', '#3a3c42', '#2a2c30'); if (st === 'on') { const p = P(0.5, 0.75, 6); prect(x, p[0], p[1], 2 * AR, AR, '#7ae87a'); } break;
+    case 'fogueira': { for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2, p = P(0.5 + Math.cos(a) * 0.3, 0.5 + Math.sin(a) * 0.3, 0); prect(x, p[0] - AR, p[1] - 2 * AR, 3 * AR, 2 * AR, '#8a8e94'); } pbox(x, P, 0.3, 0.45, 0.4, 0.1, 2, 0, '#7a5230', '#5a3a20', '#4a2e18'); pbox(x, P, 0.45, 0.3, 0.1, 0.4, 2, 1, '#7a5230', '#5a3a20', '#4a2e18'); break; }
     case 'banco': pbox(x, P, 0.1, 0.35, 0.8, 0.3, 2, 5, '#9a6a3c', '#7c5230', '#64421f'); pbox(x, P, 0.1, 0.35, 0.8, 0.06, 7, 7, '#9a6a3c', '#7c5230', '#64421f'); for (const a of [0.12, 0.82]) pbox(x, P, a, 0.55, 0.06, 0.06, 5, 0, '#3a3e48', '#3a3e48', '#2a2c32', null); break;
     case 'lixeira': pbox(x, P, 0.3, 0.3, 0.4, 0.4, 12, 0, '#3a5a3a', '#2e4a2e', '#243a24'); break;
-    case 'poste': { const p = P(0.5, 0.5, 0); prect(x, p[0], p[1] - 40, 1, 40, '#2a2c32'); prect(x, p[0] - 4, p[1] - 41, 8, 2, '#2a2c32'); prect(x, p[0] + 3, p[1] - 39, 2, 1, st === 'on' ? '#fff0a0' : '#8a8a80'); break; }
-    case 'placa': { const p = P(0.5, 0.5, 0); prect(x, p[0], p[1] - 40, 2, 40, '#3a3c42'); prect(x, p[0] - 10, p[1] - 50, 22, 12, '#c9302c'); prect(x, p[0] - 9, p[1] - 49, 20, 10, '#e8e8e0'); prect(x, p[0] - 7, p[1] - 47, 16, 2, '#c9302c'); prect(x, p[0] - 7, p[1] - 43, 10, 2, '#3a3c42'); break; }
+    case 'poste': { const p = P(0.5, 0.5, 0), A2 = AR; prect(x, p[0], p[1] - 40 * A2, A2, 40 * A2, '#2a2c32'); prect(x, p[0] + A2, p[1] - 40 * A2, 1, 40 * A2, '#4a4c54'); prect(x, p[0] - 4 * A2, p[1] - 41 * A2, 8 * A2, 2 * A2, '#2a2c32'); prect(x, p[0] + 3 * A2, p[1] - 39 * A2, 2 * A2, A2, st === 'on' ? '#fff0a0' : '#8a8a80'); break; }
+    case 'placa': { const p = P(0.5, 0.5, 0), A2 = AR; prect(x, p[0], p[1] - 40 * A2, 2 * A2, 40 * A2, '#3a3c42'); prect(x, p[0] - 10 * A2, p[1] - 50 * A2, 22 * A2, 12 * A2, '#c9302c'); prect(x, p[0] - 9 * A2, p[1] - 49 * A2, 20 * A2, 10 * A2, '#e8e8e0'); prect(x, p[0] - 7 * A2, p[1] - 47 * A2, 16 * A2, 2 * A2, '#c9302c'); prect(x, p[0] - 7 * A2, p[1] - 43 * A2, 10 * A2, 2 * A2, '#3a3c42'); break; }
     case 'galinheiro': pbox(x, P, 0.1, 0.15, 0.8, 0.7, 12, 0, '#b88a54', '#9a7040', '#7e5a32'); pbox(x, P, 0.05, 0.1, 0.9, 0.8, 2, 12, '#8a3a28', '#6e2e20', '#5a2418'); faceS(x, P, 0.1, 0.85, 0.35, 0.6, 0, 7, '#2a1e14'); break;
   }
   const r = { c, ox, oy }; furnCache[key] = r; return r;
@@ -292,7 +316,7 @@ const carCache = {};
 function carImg(dir, col, kind = 'carro') {
   const key = dir + col + kind; if (carCache[key]) return carCache[key];
   const big = kind === 'caminhao';
-  const c = mkCanvas(big ? 160 : 96, big ? 120 : 80), x = c.getContext('2d'), ox = big ? 80 : 48, oy = big ? 56 : 40, P = L(ox, oy);
+  const c = mkCanvas((big ? 160 : 96) * AR, (big ? 120 : 80) * AR), x = c.getContext('2d'), ox = (big ? 80 : 48) * AR, oy = (big ? 56 : 40) * AR, P = L(ox, oy);
   const w = dir === 'I' ? (big ? 4 : 2) : (big ? 2 : 1), d = dir === 'I' ? (big ? 2 : 1) : (big ? 4 : 2);
   const i0 = 0.12, j0 = 0.12, ww = w - 0.24, dd = d - 0.24, dark = shade(col, 0.75), dark2 = shade(col, 0.6);
   pbox(x, P, i0, j0, ww, dd, 4, 1, '#1e2026', '#16181c', '#16181c');
@@ -310,7 +334,7 @@ function carImg(dir, col, kind = 'carro') {
     for (let k = 0; k < 3; k++) s(k);
   }
   const wheels = dir === 'I' ? [[i0 + 0.35, j0 + dd], [i0 + ww - 0.35, j0 + dd], [i0 + ww, j0 + 0.3]] : [[i0 + ww, j0 + 0.35], [i0 + ww, j0 + dd - 0.35], [i0 + 0.3, j0 + dd]];
-  for (const [a, bb] of wheels) { const p = P(a, bb, 3); pdisc(x, p[0], p[1], big ? 4 : 3, '#16181c'); pdisc(x, p[0], p[1], 1, '#80868e'); }
+  for (const [a, bb] of wheels) { const p = P(a, bb, 3); pdisc(x, p[0], p[1], (big ? 4 : 3) * AR, '#16181c'); pdisc(x, p[0], p[1], AR, '#80868e'); pdisc(x, p[0], p[1], 0, '#c8ccd2'); }
   const r = { c, ox, oy }; carCache[key] = r; return r;
 }
 
@@ -407,9 +431,8 @@ function humanImg(o) {
   }
   if (o.hat) { R(hx - 1, hy - 1, 8, 2, o.hat); R(hx, hy - 2, 6, 1, o.hat); if (o.hat === '#e8c040') R(hx + 2, hy - 1, 2, 1, '#c8a030'); }
   if (book) { R(book[0], book[1], tw - 2, 3, '#a83a3a'); R(book[0] + 1, book[1], tw - 4, 1, '#f0ead8'); R(book[0] + Math.floor((tw - 2) / 2), book[1], 1, 3, '#5e1418'); }
-  outlineCanvas(c);
   if (weaponAt && o.weapon) drawWeaponOn(x, weaponAt[0] + 2, weaponAt[1] + 2, weaponAt[2], o.weapon);
-  const r = { c, ox: 10, oy: 26 }; humanCache[key] = r; return r;
+  const r = { c: finishSprite(c), ox: 10 * AR, oy: 26 * AR }; humanCache[key] = r; return r;
 }
 function drawWeaponOn(x, hx, hy, how, wpn) {
   const col = { cano: '#a7adb5', taco: '#b8875a', faca: '#c8ccd2', machado: '#8a6038', martelo: '#8a6038', lanca: '#9a7048', pistola: '#2a2c32', punho: null }[wpn];
@@ -427,9 +450,9 @@ function drawWeaponOn(x, hx, hy, how, wpn) {
 const lyingCache = {};
 function lyingImg(o) {
   const key = JSON.stringify(o); if (lyingCache[key]) return lyingCache[key];
-  const s = humanImg(Object.assign({}, o, { pose: 'idle', f: 0 })).c, c = mkCanvas(28, 20), x = c.getContext('2d');
-  x.save(); x.translate(26, 0); x.rotate(Math.PI / 2); x.drawImage(s, 0, 4); x.restore();
-  const r = { c, ox: 14, oy: 16 }; lyingCache[key] = r; return r;
+  const s = humanImg(Object.assign({}, o, { pose: 'idle', f: 0 })).c, c = mkCanvas(28 * AR, 20 * AR), x = c.getContext('2d');
+  x.save(); x.translate(26 * AR, 0); x.rotate(Math.PI / 2); x.drawImage(s, 0, 4 * AR); x.restore();
+  const r = { c, ox: 14 * AR, oy: 16 * AR }; lyingCache[key] = r; return r;
 }
 // the crawler: dragging itself on its belly, its own silhouette
 const crawlCache = {};
@@ -441,8 +464,7 @@ function crawlerImg(o, f) {
   R(16, 9, 6, 1, shade(top, 0.8)); R(15, 7, 2, 1, '#8c1f24');
   R(8, 3 + (f % 2), 6, 6, sk); R(9, 3 + (f % 2), 4, 1, '#3a3a30'); R(9, 5 + (f % 2), 1, 1, o.eyes); R(12, 5 + (f % 2), 1, 1, o.eyes); R(10, 7 + (f % 2), 2, 1, '#5e1418');
   const reach = f % 2 ? 0 : 2; R(2 + reach, 8, 6, 2, sk); R(4 - reach, 10, 6, 2, sk);
-  outlineCanvas(c);
-  const r = { c, ox: 16, oy: 13 }; crawlCache[key] = r; return r;
+  const r = { c: finishSprite(c), ox: 16 * AR, oy: 13 * AR }; crawlCache[key] = r; return r;
 }
 // farm animals
 const animCache = {};
@@ -451,7 +473,7 @@ function chickenImg(f, dead) {
   const c = mkCanvas(14, 14), x = c.getContext('2d'), R = (a, b, w, h, col) => prect(x, a + 2, b + 2, w, h, col);
   if (dead) { R(1, 6, 8, 3, '#e8e8e0'); R(0, 6, 2, 1, '#d83838'); R(3, 9, 1, 1, '#e8a830'); }
   else { const py = f % 2; R(2, 3, 7, 5, '#f0f0e8'); R(7, 4, 2, 3, '#d8d8d0'); R(1 - 0, 1 + py, 3, 3, '#f0f0e8'); R(1, 0 + py, 2, 1, '#d83838'); R(0, 2 + py, 1, 1, '#e8a830'); R(2, 2 + py, 1, 1, '#1a1a22'); R(4, 8, 1, 2, '#e8a830'); R(6, 8, 1, 2, '#e8a830'); }
-  outlineCanvas(c); const r = { c, ox: 7, oy: 12 }; animCache[key] = r; return r;
+  const r = { c: finishSprite(c), ox: 7 * AR, oy: 12 * AR }; animCache[key] = r; return r;
 }
 function cowImg(f, dead) {
   const key = 'v' + f + dead; if (animCache[key]) return animCache[key];
@@ -464,7 +486,7 @@ function cowImg(f, dead) {
     lg(6, f === 1 ? 1 : 0); lg(9, f === 3 ? 1 : 0); lg(16, f === 3 ? 1 : 0); lg(19, f === 1 ? 1 : 0);
     R(20, 7, 2, 1, '#2a2a2e'); R(21, 8, 1, 4, '#d8d0c0'); R(12, 13, 3, 2, '#e0a8a0');
   }
-  outlineCanvas(c); const r = { c, ox: 14, oy: 20 }; animCache[key] = r; return r;
+  const r = { c: finishSprite(c), ox: 14 * AR, oy: 20 * AR }; animCache[key] = r; return r;
 }
 
 // ---- item icons (10x10 pixel maps) ------------------------------------------------------------
@@ -533,6 +555,9 @@ function iconImg(name, tint) {
   rows.forEach((r, j) => [...r].forEach((ch, i) => { if (ch !== '.') { prect(x, i + 1, j + 1, 1, 1, (tint && ch === 'R') ? tint : (tint && ch === 'q') ? shade(tint, 0.6) : IPAL[ch] || '#f0f'); } }));
   outlineCanvas(c); iconCache[key] = c; return c;
 }
+// the same icon for the world (items lying on the ground), at the world's resolution
+const icon2Cache = {};
+function iconImg2(name, tint) { const key = name + (tint || ''); if (icon2Cache[key]) return icon2Cache[key]; const rows = ICONS[name] || ['KK', 'KK'], w = Math.max(...rows.map(r => r.length)), h = rows.length, c = mkCanvas(w, h), x = c.getContext('2d'); rows.forEach((r, j) => [...r].forEach((ch, i) => { if (ch !== '.') prect(x, i, j, 1, 1, (tint && ch === 'R') ? tint : (tint && ch === 'q') ? shade(tint, 0.6) : IPAL[ch] || '#f0f'); })); const out = finishSprite(c); icon2Cache[key] = out; return out; }
 
 // ---- moodle badges --------------------------------------------------------------------------------
 const MOODLE_ICON = {

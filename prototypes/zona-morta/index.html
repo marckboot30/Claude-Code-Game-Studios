@@ -39,18 +39,19 @@ const events = []; // window.game.events: anything the game wants a run to see
 
 // ---- Screen ---------------------------------------------------------------------------
 const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d', { willReadFrequently: true }); // the night light reads the frame back
+const ctx = canvas.getContext('2d');
 let viewScale = 1;
+const AR_SCREEN = 2; // must match AR in js/art.js
 function fit() { // the canvas takes the screen's shape, so a phone is filled edge to edge
   const coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
   W = Math.max(480, Math.min(900, Math.round(H * innerWidth / Math.max(1, innerHeight) / 2) * 2));
   const k = Math.min(innerWidth / W, innerHeight / H);
   const s = (k < 1 || coarse) ? k : Math.floor(k); viewScale = s; // a phone fills its screen; a desktop keeps whole-number pixels
-  canvas.width = W; canvas.height = H;
+  canvas.width = W * AR_SCREEN; canvas.height = H * AR_SCREEN; // twice the pixels: the world is drawn in fine pixels, the HUD in logical ones
   canvas.style.width = (W * s) + 'px'; canvas.style.height = (H * s) + 'px';
   canvas.style.marginTop = Math.max(0, Math.floor((innerHeight - H * s) / 2)) + 'px';
   canvas.style.imageRendering = 'pixelated';
-  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false;
+  ctx.setTransform(AR_SCREEN, 0, 0, AR_SCREEN, 0, 0); ctx.imageSmoothingEnabled = false;
 }
 addEventListener('resize', fit); fit();
 
@@ -74,13 +75,13 @@ const stick = { id: null, cx: 0, cy: 0, dx: 0, dy: 0, keys: new Set() };
 const TBTN_DEF = [
   ['ATACAR', 'Space', 32, -60, 18], ['USAR', 'KeyE', 72, -34, 15], ['MOCHILA', 'Tab', 76, -76, 13], ['AGACHAR', 'KeyC', 30, -104, 12],
   ['CONSTR', 'KeyB', 112, -26, 12], ['SAUDE', 'KeyH', 112, -58, 11], ['EMPURRA', 'KeyQ', 66, -112, 11], ['LUZ', 'KeyF', 104, -92, 10],
-  ['PAUSA', 'KeyP', 114, 14, 9], ['+', 'Equal', 86, 20, 10], ['-', 'Minus', 86, 46, 10],
+  ['PAUSA', 'KeyP', 86, 14, 9],
 ];
 const TBTN = TBTN_DEF.map(([l, c]) => ({ l, c, x: 0, y: 0, r: 10, lit: 0 }));
 function placeButtons() { TBTN_DEF.forEach(([, , dx, dy, r], k) => { TBTN[k].x = W - dx; TBTN[k].y = dy < 0 ? H + dy : dy; TBTN[k].r = r; }); }
 placeButtons(); addEventListener('resize', placeButtons);
 // two fingers away from the stick and buttons pinch the camera in and out
-const pinch = new Map(); let pinchD = 0;
+const pinch = new Map(); let pinchD = 0, pinchZ = 1, zoomMul = 1;
 function applyStick() {
   for (const k of stick.keys) down.delete(k); stick.keys.clear();
   const m = Math.hypot(stick.dx, stick.dy); if (m < 5) return;
@@ -95,7 +96,7 @@ canvas.addEventListener('pointermove', e => {
   if (e.pointerId === stick.id) { stick.dx = Math.max(-28, Math.min(28, x - stick.cx)); stick.dy = Math.max(-28, Math.min(28, y - stick.cy)); applyStick(); return; }
   if (pinch.has(e.pointerId)) {
     pinch.set(e.pointerId, [x, y]);
-    if (pinch.size === 2) { const [a, b] = [...pinch.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinchD && d / pinchD > 1.35) { zoomReq = 1; pinchD = d; } else if (pinchD && d / pinchD < 0.74) { zoomReq = -1; pinchD = d; } }
+    if (pinch.size === 2 && pinchD) { const [a, b] = [...pinch.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); ZOOM = Math.max(0.6, Math.min(3, pinchZ * d / pinchD)); if (state) state.zoomShow = 0.8; } // fingers apart: closer, together: farther
     return;
   }
   if (e.pointerType === 'touch') return;
@@ -108,7 +109,7 @@ canvas.addEventListener('pointerdown', e => {
     const b = TBTN.find(q => Math.hypot(x - q.x, y - q.y) <= q.r + 4);
     if (b) { hit.add(b.c); b.lit = 0.15; e.preventDefault(); return; }
     if (x < W * 0.42 && y > H * 0.3 && stick.id === null && !state.ui.panel && !state.ui.menu) { stick.id = e.pointerId; stick.cx = x; stick.cy = y; stick.dx = stick.dy = 0; canvas.setPointerCapture(e.pointerId); return; }
-    if (e.pointerType === 'touch') { pinch.set(e.pointerId, [x, y]); if (pinch.size === 2) { const [a, b] = [...pinch.values()]; pinchD = Math.hypot(a[0] - b[0], a[1] - b[1]); mouse.click = false; return; } }
+    if (e.pointerType === 'touch') { pinch.set(e.pointerId, [x, y]); if (pinch.size === 2) { const [a, b] = [...pinch.values()]; pinchD = Math.max(1, Math.hypot(a[0] - b[0], a[1] - b[1])); pinchZ = ZOOM; mouse.click = false; return; } }
   }
   mouse.x = x; mouse.y = y; if (e.button === 0) mouse.click = true; if (e.button === 2) hit.add('KeyQ');
 });
@@ -116,7 +117,8 @@ canvas.addEventListener('pointerup', e => { if (e.pointerId === stick.id) releas
 canvas.addEventListener('pointercancel', e => { if (e.pointerId === stick.id) releaseStick(); pinch.delete(e.pointerId); if (pinch.size < 2) pinchD = 0; });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 let zoomReq = 0;
-canvas.addEventListener('wheel', e => { zoomReq = e.deltaY < 0 ? 1 : -1; e.preventDefault(); }, { passive: false });
+// (kept for the pinch's steps)
+canvas.addEventListener('wheel', e => { zoomMul *= Math.pow(1.0015, -e.deltaY); e.preventDefault(); }, { passive: false }); // the wheel zooms smoothly
 
 // ---- Audio: started on first input, mute on N --------------------------------------------
 let audio = null, muted = false;
@@ -181,9 +183,11 @@ function playUpdate(dt) {
   if (state.click) { for (const h of hits) if (mouse.x >= h.x && mouse.x < h.x + h.w && mouse.y >= h.y && mouse.y < h.y + h.h) { h.fn(); state.click = false; break; } }
   if (pressed('KeyN')) { setMuted(!muted); }
   // the camera: three whole-number zoom steps, so the pixels stay square
-  if (pressed('Equal') || pressed('NumpadAdd') || zoomReq > 0) { ZOOM = Math.min(3, ZOOM + 1); state.zoomShow = 1.2; }
-  if (pressed('Minus') || pressed('NumpadSubtract') || zoomReq < 0) { ZOOM = Math.max(1, ZOOM - 1); state.zoomShow = 1.2; }
-  if (pressed('KeyZ')) { ZOOM = ZOOM >= 3 ? 1 : ZOOM + 1; state.zoomShow = 1.2; }
+  // the camera: a free zoom from far (0.6x) to close (3x), by the wheel, two fingers or the keys
+  if (pressed('Equal') || pressed('NumpadAdd')) zoomMul *= 1.25;
+  if (pressed('Minus') || pressed('NumpadSubtract')) zoomMul /= 1.25;
+  if (pressed('KeyZ')) { ZOOM = ZOOM < 1.5 ? 2 : 1; state.zoomShow = 0.8; }
+  if (zoomMul !== 1) { ZOOM = Math.max(0.6, Math.min(3, ZOOM * zoomMul)); zoomMul = 1; state.zoomShow = 0.8; }
   zoomReq = 0; if (state.zoomShow > 0) state.zoomShow -= dt;
   // the map
   if (ui.map) {
@@ -248,7 +252,7 @@ const scenes = {
     draw() {
       scenes.play.draw(); ctx.fillStyle = 'rgba(8,10,16,0.75)'; ctx.fillRect(0, 0, W, H);
       ptext(ctx, 'PAUSADO', W / 2, 40, '#f0ead8', '#0b0d12', 4, 'center');
-      const C = ['WASD ANDAR   SHIFT CORRER (BARULHO)   C AGACHAR (SILENCIO)', 'CLIQUE OU ESPACO ATACAR   Q OU BOTAO DIREITO EMPURRAR', 'E VASCULHAR / USAR / PEGAR / ABRIR PORTA', 'TAB INVENTARIO (SETAS, ENTER USA, X LARGA)   H SAUDE E BANDAGENS', 'B CONSTRUIR: BARRICAR, PAREDE, FOGUEIRA, DESMONTAR', 'F LANTERNA   M MAPA (OU CLIQUE NO MINIMAPA)   Z OU RODA ZOOM   N SOM ' + (muted ? '(MUDO)' : '(LIGADO)'), '', 'P OU ESC VOLTA'];
+      const C = ['WASD ANDAR   SHIFT CORRER (BARULHO)   C AGACHAR (SILENCIO)', 'CLIQUE OU ESPACO ATACAR   Q OU BOTAO DIREITO EMPURRAR', 'E VASCULHAR / USAR / PEGAR / ABRIR PORTA', 'TAB INVENTARIO (SETAS, ENTER USA, X LARGA)   H SAUDE E BANDAGENS', 'B CONSTRUIR: BARRICAR, PAREDE, FOGUEIRA, DESMONTAR', 'F LANTERNA   M MAPA (OU CLIQUE NO MINIMAPA)   RODA DO MOUSE ZOOM   N SOM ' + (muted ? '(MUDO)' : '(LIGADO)'), '', 'P OU ESC VOLTA'];
       C.forEach((c, k) => ptext(ctx, c, W / 2, 90 + k * 12, '#c8ccd6', '#0b0d12', 1, 'center'));
     },
   },

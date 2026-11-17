@@ -7,8 +7,9 @@
 
 let camX = 0, camY = 0, curB = -1, ZOOM = 1; // ZOOM: whole-number steps, 1 or 2
 const fadeB = new Set();
-function isoS(x, y, z = 0) { return [Math.round((x - y) * 16 - camX), Math.round((x + y) * 8 - z - camY)]; }
-function screenToWorld(sx, sy) { const X = sx / ZOOM + camX, Y = sy / ZOOM + camY, a = X / 16, b = Y / 8; return [(a + b) / 2, (b - a) / 2]; }
+// world pictures are drawn in art pixels (AR per 1x pixel); the screen holds AR device pixels per logical pixel
+function isoS(x, y, z = 0) { return [Math.round((x - y) * 16 * AR - camX), Math.round((x + y) * 8 * AR - z * AR - camY)]; }
+function screenToWorld(sx, sy) { const X = sx * AR / ZOOM + camX, Y = sy * AR / ZOOM + camY, a = X / (16 * AR), b = Y / (8 * AR); return [(a + b) / 2, (b - a) / 2]; }
 function blit(img, x, y, alpha = 1, flip = false) {
   if (alpha < 1) ctx.globalAlpha = alpha;
   if (flip) { ctx.save(); ctx.translate(x + img.c.width, y); ctx.scale(-1, 1); ctx.drawImage(img.c, 0, 0); ctx.restore(); }
@@ -95,19 +96,19 @@ function drawFurn(f, i, j) {
   const v = f.t === 'arvore' ? f.v % 3 : f.t === 'estante' ? f.v % 6 : f.t === 'cama' || f.t === 'sofa' ? f.v % 4 : 0;
   const img = furnImg(f.t, v, furnState(f));
   let [x, y] = isoS(f.i, f.j);
-  if (f.shake > 0) { f.shake -= 1 / 60; x += Math.round(Math.sin(state.t * 60) * 1); }
+  if (f.shake > 0) { f.shake -= 1 / 60; x += Math.round(Math.sin(state.t * 60) * AR); }
   let a = 1;
-  if (f.t === 'arvore') { const ps = isoS(p.x, p.y); if (f.i + f.j > p.x + p.y - 0.5 && Math.abs(ps[0] - x) < 18 && ps[1] < y + 6 && ps[1] > y - 60) a = 0.4; }
+  if (f.t === 'arvore') { const ps = isoS(p.x, p.y); if (f.i + f.j > p.x + p.y - 0.5 && Math.abs(ps[0] - x) < 18 * AR && ps[1] < y + 6 * AR && ps[1] > y - 60 * AR) a = 0.4; }
   if (fadeB.has(f.b)) a = 0.35;
   blit(img, x - img.ox, y - img.oy, a);
-  if (f.cont && !f.searched && Math.hypot(f.i + 0.5 - p.x, f.j + 0.5 - p.y) < 4.5 && Math.floor(state.t * 2.5 + f.i) % 3 === 0) { const [sx, sy] = isoS(f.i + 0.5, f.j + 0.5, f.t === 'armario' || f.t === 'guarda' || f.t === 'geladeira' || f.t === 'estante' ? 34 : 18); prect(ctx, sx - 2, sy, 5, 1, '#f0d040'); prect(ctx, sx, sy - 2, 1, 5, '#f0d040'); prect(ctx, sx, sy, 1, 1, '#ffffff'); }
-  if (f.t === 'fogueira' && f.fuel > 0) { const [fx, fy] = isoS(f.i + 0.5, f.j + 0.5, 3); const k = Math.floor(state.t * 10) % 3; prect(ctx, fx - 2, fy - 4 - k, 5, 4 + k, '#e87a2a'); prect(ctx, fx - 1, fy - 6 - k, 3, 4, '#f2c24a'); prect(ctx, fx, fy - 8 - (k === 1 ? 1 : 0), 1, 2, '#fff0a0'); }
-  if (f.t === 'tv' && f.on) { /* the picture flickers */ if (Math.floor(state.t * 6) % 2) { const [tx, ty] = isoS(f.i + 0.4, f.j + 0.6, 13); prect(ctx, tx - 2, ty, 3, 1, '#ffffff'); } }
+  if (f.cont && !f.searched && Math.hypot(f.i + 0.5 - p.x, f.j + 0.5 - p.y) < 4.5 && Math.floor(state.t * 2.5 + f.i) % 3 === 0) { const [sx, sy] = isoS(f.i + 0.5, f.j + 0.5, f.t === 'armario' || f.t === 'guarda' || f.t === 'geladeira' || f.t === 'estante' ? 34 : 18); prect(ctx, sx - 2 * AR, sy, 5 * AR, AR, '#f0d040'); prect(ctx, sx, sy - 2 * AR, AR, 5 * AR, '#f0d040'); prect(ctx, sx, sy, AR, AR, '#ffffff'); }
+  if (f.t === 'fogueira' && f.fuel > 0) { const [fx, fy] = isoS(f.i + 0.5, f.j + 0.5, 3); const k = Math.floor(state.t * 10) % 3; const A2 = AR; prect(ctx, fx - 2 * A2, fy - (4 + k) * A2, 5 * A2, (4 + k) * A2, '#e87a2a'); prect(ctx, fx - A2, fy - (6 + k) * A2, 3 * A2, 4 * A2, '#f2c24a'); prect(ctx, fx, fy - (8 + (k === 1 ? 1 : 0)) * A2, A2, 2 * A2, '#fff0a0'); }
+  if (f.t === 'tv' && f.on) { /* the picture flickers */ if (Math.floor(state.t * 6) % 2) { const [tx, ty] = isoS(f.i + 0.4, f.j + 0.6, 13); prect(ctx, tx - 2 * AR, ty, 3 * AR, AR, '#ffffff'); } }
 }
 function drawGround(i, j) {
   const g = world.ground.get(idx(i, j)); if (!g || !g.length) return;
   const [x, y] = isoS(i + 0.5, j + 0.5);
-  for (let k = 0; k < Math.min(3, g.length); k++) { const d = itemDef(g[k].id), ic = iconImg(d.icon, d.tint); ctx.drawImage(ic, x - (ic.width >> 1) + (k - 1) * 5, y - ic.height + 2 - k); }
+  for (let k = 0; k < Math.min(3, g.length); k++) { const d = itemDef(g[k].id), ic = iconImg2(d.icon, d.tint); ctx.drawImage(ic, x - (ic.width >> 1) + (k - 1) * 5 * AR, y - ic.height + (2 - k) * AR); }
 }
 function drawEntity(en) {
   if (en.kind === 'player') {
@@ -115,14 +116,14 @@ function drawEntity(en) {
     if (r.lying) { const b = p.action && p.action.bed; if (b) [x, y] = isoS(b.i + 0.5, b.j + 0.5, 4); }
     shadow(x, y); blit(r.img, x - r.img.ox, y - r.img.oy, 1, r.flip);
     if (p.hurt > 0 && Math.floor(state.t * 20) % 2) { ctx.globalAlpha = 0.5; ctx.globalCompositeOperation = 'source-atop'; ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
-    if (state.muzzle > 0) { const sx = x + p.dir[0] * 10 - p.dir[1] * 10, sy = y - 14 + (p.dir[0] + p.dir[1]) * 4; prect(ctx, sx - 2, sy - 2, 5, 5, '#fff0a0'); }
+    if (state.muzzle > 0) { const sx = x + (p.dir[0] * 10 - p.dir[1] * 10) * AR, sy = y + (-14 + (p.dir[0] + p.dir[1]) * 4) * AR; prect(ctx, sx - 2 * AR, sy - 2 * AR, 5 * AR, 5 * AR, '#fff0a0'); }
     return;
   }
   if (en.kind === 'zombie') {
     const z = en.z, r = zombieImg(z), [x, y] = isoS(z.x, z.y);
     if (!z.dead) shadow(x, y);
     blit(r.img, x - r.img.ox, y - r.img.oy, z.dead ? 0.9 : 1, r.flip);
-    if (z.flash > 0) { prect(ctx, x - 1, y - 30, 3, 3, '#ff4040'); }
+    if (z.flash > 0) { prect(ctx, x - AR, y - 30 * AR, 3 * AR, 3 * AR, '#ff4040'); }
     return;
   }
   if (en.kind === 'animal') {
@@ -131,13 +132,13 @@ function drawEntity(en) {
     blit(img, x - img.ox, y - img.oy, 1, !!a.fl);
   }
 }
-function shadow(x, y, w = 5) { ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(x - w, y - 1, w * 2 + 1, 2); ctx.fillRect(x - w + 2, y - 2, w * 2 - 3, 1); ctx.fillRect(x - w + 2, y + 1, w * 2 - 3, 1); }
+function shadow(x, y, w = 5) { ctx.fillStyle = 'rgba(0,0,0,0.26)'; ctx.beginPath(); ctx.ellipse(x, y, (w + 0.5) * AR, 1.6 * AR, 0, 0, Math.PI * 2); ctx.fill(); }
 function drawWorld() {
   const p = state.p;
-  const px = (p.x - p.y) * 16, py = (p.x + p.y) * 8;
-  const VW = W / ZOOM, VH = H / ZOOM;
-  camX = Math.round(px - VW / 2); camY = Math.round(py - VH / 2 + 6);
-  ctx.setTransform(ZOOM, 0, 0, ZOOM, 0, 0);
+  const px = (p.x - p.y) * 16 * AR, py = (p.x + p.y) * 8 * AR;
+  const VW = W * AR / ZOOM, VH = H * AR / ZOOM; // the view in art pixels
+  camX = Math.round(px - VW / 2); camY = Math.round(py - VH / 2 + 6 * AR);
+  ctx.setTransform(ZOOM, 0, 0, ZOOM, 0, 0); ctx.imageSmoothingEnabled = Math.abs(ZOOM - Math.round(ZOOM)) > 0.01; // a free zoom is smoothed
   const b = buildingAt(p.x, p.y); curB = b ? b.id : -1;
   // buildings that hide the survivor fade
   fadeB.clear();
@@ -147,18 +148,19 @@ function drawWorld() {
     if (Math.abs(B.x0 - p.x) > 16 || Math.abs(B.y0 - p.y) > 16) continue;
     if (pd > B.x0 - B.y1 - 0.5 && pd < B.x1 - B.y0 + 0.5 && B.x1 + B.y1 > ps + 0.3 && B.x0 + B.y0 < ps + 5) fadeB.add(B.id);
   }
-  ctx.fillStyle = '#16181c'; ctx.fillRect(0, 0, W, H);
-  const s0 = Math.floor((camY - 30) / 8), s1 = Math.ceil((camY + VH + 90) / 8), d0 = Math.floor((camX - 40) / 16), d1 = Math.ceil((camX + VW + 40) / 16);
+  ctx.fillStyle = '#16181c'; ctx.fillRect(0, 0, VW + 2, VH + 2);
+  const TX = 16 * AR, TY = 8 * AR;
+  const s0 = Math.floor((camY - 30 * AR) / TY), s1 = Math.ceil((camY + VH + 90 * AR) / TY), d0 = Math.floor((camX - 40 * AR) / TX), d1 = Math.ceil((camX + VW + 40 * AR) / TX);
   const wf = Math.floor(state.t * 1.5);
   // floors
   for (let s = s0; s <= s1; s++) for (let d = d0; d <= d1; d++) {
     if ((s + d) & 1) continue; const i = (s + d) >> 1, j = (s - d) >> 1; if (!inMap(i, j)) continue;
     const k = idx(i, j), fl = world.floor[k];
     const img = floorImg(fl, fl === 'agua' ? (world.fv[k] + wf) % 4 : world.fv[k]);
-    ctx.drawImage(img, d * 16 - camX - 16, s * 8 - camY);
-    if (world.glass.has(k)) { const [gx, gy] = isoS(i + 0.5, j + 0.5); for (let q = 0; q < 4; q++) { const h1 = hash2(i, j, q); prect(ctx, gx - 8 + Math.floor(h1 * 16), gy - 4 + Math.floor(hash2(j, i, q) * 8), 1, 1, (Math.floor(state.t * 3 + q) % 3) ? '#c8e0f0' : '#ffffff'); } }
+    ctx.drawImage(img, d * TX - camX - TX, s * TY - camY);
+    if (world.glass.has(k)) { const [gx, gy] = isoS(i + 0.5, j + 0.5); for (let q = 0; q < 4; q++) { const h1 = hash2(i, j, q); prect(ctx, gx - 8 * AR + Math.floor(h1 * 16 * AR), gy - 4 * AR + Math.floor(hash2(j, i, q) * 8 * AR), AR, AR, (Math.floor(state.t * 3 + q) % 3) ? '#c8e0f0' : '#ffffff'); } }
   }
-  for (const dcl of state.decals) { const [x, y] = isoS(dcl.x, dcl.y); if (x < -10 || y < -10 || x > W + 10 || y > H + 10) continue; pdisc(ctx, x, y, dcl.r, '#6e1418', 0.5); prect(ctx, x + dcl.r + 1, y, 1, 1, '#5e1418'); }
+  for (const dcl of state.decals) { const [x, y] = isoS(dcl.x, dcl.y); if (x < -20 || y < -20 || x > VW + 20 || y > VH + 20) continue; pdisc(ctx, x, y, dcl.r * AR, '#6e1418', 0.5); prect(ctx, x + (dcl.r + 1) * AR, y, AR, AR, '#5e1418'); }
   // entities by tile
   const buckets = new Map(); const put = (x, y, en) => { const k = idx(Math.floor(x), Math.floor(y)); if (!buckets.has(k)) buckets.set(k, []); en.o = x + y; buckets.get(k).push(en); };
   put(p.x, p.y, { kind: 'player' });
@@ -175,7 +177,7 @@ function drawWorld() {
     if (bid >= 0 && bid !== curB) { const B = world.buildings[bid], r = roofImg(B, i, j), [x, y] = isoS(i, j); blit(r, x - r.ox, y - r.oy, fadeB.has(bid) ? 0.4 : 1); }
   }
   if (state.ui.build) drawBuildGhost();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.setTransform(AR, 0, 0, AR, 0, 0); ctx.imageSmoothingEnabled = false; // back to logical pixels for the HUD
 }
 function drawBuildGhost() {
   const t = buildTarget(); if (!t) return;
@@ -183,46 +185,42 @@ function drawBuildGhost() {
   const col = good ? 'rgba(120,230,120,0.55)' : 'rgba(240,90,80,0.55)';
   if (t.kind === 'edge' || t.kind === 'newedge') {
     const a = isoS(t.i, t.j), b2 = t.dir === 'V' ? isoS(t.i, t.j + 1) : isoS(t.i + 1, t.j);
-    ctx.fillStyle = col; pfill(ctx, [a, b2, [b2[0], b2[1] - WALL_H], [a[0], a[1] - WALL_H]], col);
+    ctx.fillStyle = col; pfill(ctx, [a, b2, [b2[0], b2[1] - WALL_H * AR], [a[0], a[1] - WALL_H * AR]], col);
     pline(ctx, a[0], a[1], b2[0], b2[1], good ? '#9af09a' : '#ff6060');
   } else {
-    const [x, y] = isoS(t.i, t.j); pfill(ctx, [[x, y], [x + 16, y + 8], [x, y + 16], [x - 16, y + 8]], col);
+    const [x, y] = isoS(t.i, t.j); pfill(ctx, [[x, y], [x + 16 * AR, y + 8 * AR], [x, y + 16 * AR], [x - 16 * AR, y + 8 * AR]], col);
   }
 }
 
 // ---- night light ----------------------------------------------------------------------------------
 let lightCv = null, lightCx = null;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-function addLight(x, y, r, c, a) { if (x < -r || y < -r || x > W + r || y > H + r) return; const g = lightCx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${c},${a})`); g.addColorStop(1, `rgba(${c},0)`); lightCx.fillStyle = g; lightCx.fillRect(x - r, y - r, r * 2, r * 2); }
+function addLight(x, y, r, c, a) { r *= AR; const g = lightCx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${c},${a})`); g.addColorStop(1, `rgba(${c},0)`); lightCx.fillStyle = g; lightCx.fillRect(x - r, y - r, r * 2, r * 2); }
+// night: a light map (the dark plus every lamp, fire and torch) multiplied over the frame, smooth and on the GPU
 function lighting() {
   const dl = daylight(); if (dl >= 0.999 && !state.lightTest) return;
-  if (!lightCv || lightCv.width !== W || lightCv.height !== H) { lightCv = document.createElement('canvas'); lightCv.width = W; lightCv.height = H; lightCx = lightCv.getContext('2d', { willReadFrequently: true }); }
+  const DW = W * AR, DH = H * AR;
+  if (!lightCv || lightCv.width !== DW || lightCv.height !== DH) { lightCv = document.createElement('canvas'); lightCv.width = DW; lightCv.height = DH; lightCx = lightCv.getContext('2d'); }
   const p = state.p, amb = tune.night_dark + (1 - tune.night_dark) * dl, h = hourOf(state.time);
-  lightCx.setTransform(1, 0, 0, 1, 0, 0); lightCx.globalCompositeOperation = 'source-over'; lightCx.fillStyle = '#000'; lightCx.fillRect(0, 0, W, H); lightCx.globalCompositeOperation = 'lighter'; lightCx.setTransform(ZOOM, 0, 0, ZOOM, 0, 0);
+  let ar, ag, ab;
+  if (dl > 0.05 && h > 12) { ar = amb * 1.08; ag = amb * 0.86; ab = amb * 0.74; } else if (dl > 0.05) { ar = amb * 1.0; ag = amb * 0.86; ab = amb * 0.92; } else { ar = amb * 0.62; ag = amb * 0.76; ab = Math.min(1, amb * 1.1 + 0.03); }
+  const c255 = v => Math.max(0, Math.min(255, Math.round(v * 255)));
+  lightCx.setTransform(1, 0, 0, 1, 0, 0); lightCx.globalCompositeOperation = 'source-over'; lightCx.fillStyle = `rgb(${c255(ar)},${c255(ag)},${c255(ab)})`; lightCx.fillRect(0, 0, DW, DH);
+  lightCx.globalCompositeOperation = 'lighter'; lightCx.setTransform(ZOOM, 0, 0, ZOOM, 0, 0);
   const [px, py] = isoS(p.x, p.y, 12);
-  addLight(px, py, hasTrait('olhos') ? 60 : 38, '200,205,230', 0.6);
+  addLight(px, py, hasTrait('olhos') ? 60 : 38, '200,205,230', 0.5);
   if (p.light && hasTool(p, 'lanterna')) {
-    const sx = p.dir[0] - p.dir[1], sy = (p.dir[0] + p.dir[1]) / 2, an = Math.atan2(sy, sx), R = tune.flashlight_range;
-    const g = lightCx.createRadialGradient(px, py, 0, px, py, R); g.addColorStop(0, 'rgba(255,250,220,1)'); g.addColorStop(0.7, 'rgba(255,250,220,0.75)'); g.addColorStop(1, 'rgba(255,250,220,0)');
-    lightCx.fillStyle = g; lightCx.beginPath(); lightCx.moveTo(px, py); lightCx.ellipse(px, py, R, R * 0.55, 0, an - 0.5, an + 0.5); lightCx.closePath(); lightCx.fill();
+    const sx = p.dir[0] - p.dir[1], sy = (p.dir[0] + p.dir[1]) / 2, an = Math.atan2(sy, sx), Rr = tune.flashlight_range * AR;
+    const g = lightCx.createRadialGradient(px, py, 0, px, py, Rr); g.addColorStop(0, 'rgba(255,250,220,0.95)'); g.addColorStop(0.7, 'rgba(255,250,220,0.6)'); g.addColorStop(1, 'rgba(255,250,220,0)');
+    lightCx.fillStyle = g; lightCx.beginPath(); lightCx.moveTo(px, py); lightCx.ellipse(px, py, Rr, Rr * 0.55, 0, an - 0.5, an + 0.5); lightCx.closePath(); lightCx.fill();
   }
-  for (const f of state.fires) if (f.fuel > 0) { const [x, y] = isoS(f.i + 0.5, f.j + 0.5, 4); addLight(x, y, 78 + Math.sin(state.t * 9) * 3, '255,160,80', 0.95); }
-  if (powerOn()) for (const [i, j] of world.lamps) { if (Math.abs(i - p.x) > 22 || Math.abs(j - p.y) > 22) continue; const [x, y] = isoS(i, j, 0); addLight(x, y, 58, '255,225,160', 0.75); }
-  for (const B of world.buildings) { if (!B.powered || Math.abs(B.x0 - p.x) > 22 || Math.abs(B.y0 - p.y) > 22) continue; for (const [i, j] of B.lights) { const [x, y] = isoS(i, j, B.id === curB ? 4 : 26); addLight(x, y, 46, '255,220,150', 0.8); } }
+  for (const f of state.fires) if (f.fuel > 0) { const [x, y] = isoS(f.i + 0.5, f.j + 0.5, 4); addLight(x, y, 78 + Math.sin(state.t * 9) * 3, '255,160,80', 0.9); }
+  if (powerOn()) for (const [i, j] of world.lamps) { if (Math.abs(i - p.x) > 26 || Math.abs(j - p.y) > 26) continue; const [x, y] = isoS(i, j, 0); addLight(x, y, 58, '255,225,160', 0.7); }
+  for (const B of world.buildings) { if (!B.powered || Math.abs(B.x0 - p.x) > 26 || Math.abs(B.y0 - p.y) > 26) continue; for (const [i, j] of B.lights) { const [x, y] = isoS(i, j, B.id === curB ? 4 : 26); addLight(x, y, 46, '255,220,150', 0.75); } }
   for (const g of state.gens) if (g.on) { const [x, y] = isoS(g.i + 0.5, g.j + 0.5, 8); addLight(x, y, 18, '160,255,160', 0.6); }
   for (const t of state.radios) if (t.t === 'tv' && t.on) { const [x, y] = isoS(t.i + 0.5, t.j + 0.5, 12); addLight(x, y, 34, '140,190,255', 0.7); }
   if (state.muzzle > 0) addLight(px, py, 110, '255,240,200', 1);
-  lightCx.setTransform(1, 0, 0, 1, 0, 0);
-  const sc = ctx.getImageData(0, 0, W, H), ld = lightCx.getImageData(0, 0, W, H).data, d = sc.data;
-  let ar, ag, ab;
-  if (dl > 0.05 && h > 12) { ar = amb * 1.08; ag = amb * 0.86; ab = amb * 0.74; } else if (dl > 0.05) { ar = amb * 1.0; ag = amb * 0.86; ab = amb * 0.92; } else { ar = amb * 0.62; ag = amb * 0.76; ab = Math.min(1, amb * 1.1 + 0.03); }
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const k = (y * W + x) * 4;
-    const lr = ld[k] / 255, lg = ld[k + 1] / 255, lb = ld[k + 2] / 255;
-    const q = (v) => (v > 1 ? 1 : v); // smooth light: no dither pattern
-    d[k] = d[k] * q(ar + lr * (1 - ar)); d[k + 1] = d[k + 1] * q(ag + lg * (1 - ag)); d[k + 2] = d[k + 2] * q(ab + lb * (1 - ab));
-  }
-  ctx.putImageData(sc, 0, 0);
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(lightCv, 0, 0); ctx.restore();
 }
 
 // ---- HUD -----------------------------------------------------------------------------------------
@@ -296,11 +294,11 @@ function drawHUD() {
   if (state.ui.panel === 'inv') drawInv(); else if (state.ui.panel === 'saude') drawHealth();
   if (state.ui.map) drawMap();
   if (TOUCH && !state.ui.map) drawTouch();
-  if (state.zoomShow > 0) ptext(ctx, `ZOOM ${ZOOM}X`, W / 2, 30, '#f0d040', '#0b0d12', 2, 'center');
+  if (state.zoomShow > 0) ptext(ctx, `ZOOM ${ZOOM.toFixed(1)}X`, W / 2, 30, '#f0d040', '#0b0d12', 2, 'center');
   if (p.hurt > 0) { ctx.fillStyle = `rgba(200,20,20,${p.hurt * 0.5})`; ctx.fillRect(0, 0, W, H); }
   if (p.sleeping) { ctx.fillStyle = 'rgba(0,0,10,0.45)'; ctx.fillRect(0, 0, W, H); ptext(ctx, 'DORMINDO...  (MEXA-SE PARA ACORDAR)', W / 2, H / 2 - 30, '#b8a0e0', '#0b0d12', 1, 'center'); }
 }
-function isoV(x, y, z = 0) { const q = isoS(x, y, z); return [q[0] * ZOOM, q[1] * ZOOM]; }
+function isoV(x, y, z = 0) { const q = isoS(x, y, z); return [q[0] * ZOOM / AR, q[1] * ZOOM / AR]; } // world point to logical screen
 function drawOverWorld() {
   const p = state.p;
   // noise rings
@@ -444,7 +442,7 @@ function drawTitle() {
   ctx.fillStyle = 'rgba(8,10,16,0.72)'; ctx.fillRect(0, 0, W, H);
   bigText('OS ULTIMOS DIAS', W / 2, 40, 5, '#d8d0a0'); prect(ctx, W / 2 - 155, 70, 310, 1, '#6e1418');
   ptext(ctx, 'SOBREVIVA O MAXIMO DE DIAS NUMA CIDADE INFESTADA', W / 2, 78, '#c8ccd6', '#0b0d12', 1, 'center');
-  const C = ['WASD ANDAR   SHIFT CORRER   C AGACHAR', 'CLIQUE OU ESPACO ATACAR   Q EMPURRAR', 'E VASCULHAR/USAR   TAB INVENTARIO   H SAUDE', 'B CONSTRUIR/BARRICAR   F LANTERNA   M MAPA', 'Z OU + / - ZOOM   P PAUSA   N SOM'];
+  const C = ['WASD ANDAR   SHIFT CORRER   C AGACHAR', 'CLIQUE OU ESPACO ATACAR   Q EMPURRAR', 'E VASCULHAR/USAR   TAB INVENTARIO   H SAUDE', 'B CONSTRUIR/BARRICAR   F LANTERNA   M MAPA', 'RODA DO MOUSE OU PINCA: ZOOM   P PAUSA   N SOM'];
   C.forEach((c, k) => ptext(ctx, c, W / 2, 100 + k * 10, '#9aa2b0', '#0b0d12', 1, 'center'));
   const z = [humanImg(Object.assign(zombieLook({ outfit: 0, kind: 'comum' }), { pose: 'walk', f: Math.floor(clock.now() * 4) % 4 })), humanImg(Object.assign(zombieLook({ outfit: 2, kind: 'gordo' }), { pose: 'walk', f: (Math.floor(clock.now() * 4) + 2) % 4 })), humanImg({ skin: '#e2a57c', hair: '#4a3020', under: '#eef0f2', pose: 'idle' })];
   ctx.drawImage(z[0].c, 70, 176, 40, 56); ctx.drawImage(z[1].c, 30, 180, 40, 56); ctx.drawImage(z[2].c, W - 100, 176, 40, 56);
@@ -508,9 +506,9 @@ function drawFigures() {
     ['GALINHA', chickenImg(f % 2, false).c],
     ['VACA', cowImg(f, false).c],
   ];
-  list.forEach(([n, c], k) => { const col = k % 5, row = Math.floor(k / 5), x = 14 + col * 94, y = 22 + row * 120, sc = 3, bw = c.width * sc, bh = c.height * sc; prect(ctx, x - 4, y, 88, 108, '#252934'); ctx.drawImage(c, Math.round(x + 40 - bw / 2), Math.round(y + 92 - bh), bw, bh); ptext(ctx, n, x + 40, y + 98, '#c8ccd6', '#0b0d12', 1, 'center'); });
+  list.forEach(([n, c], k) => { const col = k % 5, row = Math.floor(k / 5), x = 14 + col * 94, y = 22 + row * 120, sc = 3 / AR, bw = c.width * sc, bh = c.height * sc; prect(ctx, x - 4, y, 88, 108, '#252934'); ctx.drawImage(c, Math.round(x + 40 - bw / 2), Math.round(y + 92 - bh), bw, bh); ptext(ctx, n, x + 40, y + 98, '#c8ccd6', '#0b0d12', 1, 'center'); });
   const poses = [['LENDO', 'read'], ['ENFAIXANDO', 'bandage'], ['VENDO TV', 'sit'], ['VASCULHANDO', 'search']];
-  poses.forEach(([n, ps], k) => { const c = humanImg({ skin: '#e2a57c', hair: '#4a3020', top: '#3f7f8c', pants: '#3b4f86', shoes: '#6b4428', pose: ps, f, back: ps === 'sit' }).c; const x = 14 + 4 * 94 + (k % 2) * 46, y = 142 + Math.floor(k / 2) * 60; prect(ctx, x - 4, y, 44, 56, '#252934'); ctx.drawImage(c, x + 2, y + 2, c.width * 2, c.height * 2); ptext(ctx, n.slice(0, 10), x + 18, y + 50, '#c8ccd6', '#0b0d12', 1, 'center'); });
+  poses.forEach(([n, ps], k) => { const c = humanImg({ skin: '#e2a57c', hair: '#4a3020', top: '#3f7f8c', pants: '#3b4f86', shoes: '#6b4428', pose: ps, f, back: ps === 'sit' }).c; const x = 14 + 4 * 94 + (k % 2) * 46, y = 142 + Math.floor(k / 2) * 60; prect(ctx, x - 4, y, 44, 56, '#252934'); ctx.drawImage(c, x + 2, y + 2, c.width * 2 / AR, c.height * 2 / AR); ptext(ctx, n.slice(0, 10), x + 18, y + 50, '#c8ccd6', '#0b0d12', 1, 'center'); });
 }
 
 // ---- sound: all made in code ---------------------------------------------------------------------
