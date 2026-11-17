@@ -151,7 +151,7 @@ function drawWorld() {
   const px = (p.x - p.y) * 16 * AR, py = (p.x + p.y) * 8 * AR;
   const VW = W * AR / ZOOM, VH = H * AR / ZOOM; // the view in art pixels
   camX = Math.round(px - VW / 2); camY = Math.round(py - VH / 2 + 6 * AR);
-  ctx.setTransform(ZOOM, 0, 0, ZOOM, 0, 0); ctx.imageSmoothingEnabled = Math.abs(ZOOM - Math.round(ZOOM)) > 0.01; // a free zoom is smoothed
+  const ZR = ZOOM * RS / AR; ctx.setTransform(ZR, 0, 0, ZR, 0, 0); ctx.imageSmoothingEnabled = Math.abs(ZR - Math.round(ZR)) > 0.01; // a free zoom is smoothed
   const b = buildingAt(p.x, p.y); curB = b ? b.id : -1;
   // buildings that hide the survivor fade
   fadeB.clear();
@@ -195,7 +195,7 @@ function drawWorld() {
     if (bid >= 0 && bid !== curB) { const B = world.buildings[bid], r = roofImg(B, i, j), [x, y] = isoS(i, j); blit(r, x - r.ox, y - r.oy, fadeB.has(bid) ? 0.4 : 1); }
   }
   if (state.ui.build) drawBuildGhost();
-  ctx.setTransform(AR, 0, 0, AR, 0, 0); ctx.imageSmoothingEnabled = false; // back to logical pixels for the HUD
+  ctx.setTransform(RS, 0, 0, RS, 0, 0); ctx.imageSmoothingEnabled = false; // back to logical pixels for the HUD
 }
 function drawBuildGhost() {
   const t = buildTarget(); if (!t) return;
@@ -238,7 +238,7 @@ function lighting() {
   for (const g of state.gens) if (g.on) { const [x, y] = isoS(g.i + 0.5, g.j + 0.5, 8); addLight(x, y, 18, '160,255,160', 0.6); }
   for (const t of state.radios) if (t.t === 'tv' && t.on) { const [x, y] = isoS(t.i + 0.5, t.j + 0.5, 12); addLight(x, y, 34, '140,190,255', 0.7); }
   if (state.muzzle > 0) addLight(px, py, 110, '255,240,200', 1);
-  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'multiply'; ctx.imageSmoothingEnabled = true; ctx.drawImage(lightCv, 0, 0, W * AR, H * AR); ctx.restore();
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'multiply'; ctx.imageSmoothingEnabled = true; ctx.drawImage(lightCv, 0, 0, Math.round(W * RS), Math.round(H * RS)); ctx.restore();
 }
 
 // ---- HUD -----------------------------------------------------------------------------------------
@@ -262,7 +262,7 @@ function moodles(p) {
   return L2;
 }
 function drawMinimap() {
-  const cx = W - 34, cy = 34, r = 28, p = state.p, [mx, my] = mapXY(p.x, p.y);
+  const cx = W - 34, cy = 34 + HUD_TR.y, r = 28, p = state.p, [mx, my] = mapXY(p.x, p.y);
   ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
   ctx.fillStyle = '#0b0d12'; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
   ctx.drawImage(mapCanvas, Math.round(cx - mx), Math.round(cy - my)); ctx.drawImage(fogCanvas, Math.round(cx - mx), Math.round(cy - my));
@@ -275,6 +275,7 @@ function drawMinimap() {
 function drawHUD() {
   const p = state.p, d = dayOf(state.time), h = hourOf(state.time);
   // clock and weather
+  ctx.save(); ctx.translate(HUD_TL.x, HUD_TL.y); // clear of PlayDrop's corner buttons
   panel(4, 4, 92, 21);
   ptext(ctx, `DIA ${d}  ${clockStr(state.time)}`, 9, 8, '#f0ead8');
   const per = h < 5 ? 'MADRUGADA' : h < 12 ? 'MANHA' : h < 18 ? 'TARDE' : 'NOITE';
@@ -283,9 +284,10 @@ function drawHUD() {
   // messages
   let my = 29;
   for (const m of state.msgs.slice(-5)) { const lines = wrapTxt(m.s, 210); for (const ln of lines) { ctx.globalAlpha = Math.min(1, m.t / 1.5); ptext(ctx, ln, 6, my, m.col); ctx.globalAlpha = 1; my += 7; } }
+  ctx.restore();
   // minimap and moodles
   drawMinimap();
-  const ms = moodles(p); let yy = 68;
+  const ms = moodles(p); let yy = 68 + HUD_TR.y;
   for (const [n, s, label] of ms) { drawMoodle(ctx, n, W - 20, yy, s); ptext(ctx, label, W - 23, yy + 5, '#c8ccd6', '#0b0d12', 1, 'right'); yy += 17; if (yy > (TOUCH ? H - 140 : H - 60)) break; }
   // body, stamina, weapon, weight
   panel(4, H - 38, 120, 34);
@@ -342,6 +344,7 @@ function drawTouch() {
   if (stick.id === null) ptext(ctx, 'ANDAR', sx, sy + 30, '#9aa2b0', '#0b0d12', 1, 'center');
   // the buttons
   for (const b of TBTN) {
+    if (b.hidden) continue;
     if (b.lit > 0) b.lit -= 1 / 60;
     ctx.globalAlpha = 0.7; pdisc(ctx, b.x, b.y, b.r, b.lit > 0 ? '#5a4a18' : '#1a1d26'); ctx.globalAlpha = 1;
     for (let a = 0; a < 32; a++) { const t = a / 32 * Math.PI * 2; prect(ctx, Math.round(b.x + Math.cos(t) * b.r), Math.round(b.y + Math.sin(t) * b.r), 1, 1, b.c === 'Space' ? '#e04848' : '#8a8f9c'); }

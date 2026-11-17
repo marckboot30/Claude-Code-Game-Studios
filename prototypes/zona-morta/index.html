@@ -41,17 +41,19 @@ const events = []; // window.game.events: anything the game wants a run to see
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let viewScale = 1;
-const AR_SCREEN = 2; // must match AR in js/art.js
+const AR_SCREEN = 2; // the art's resolution, must match AR in js/art.js
+// RS: the screen's pixels per logical pixel. 2 shows every art pixel; a device that cannot keep up drops it to 1.5 or 1
+let RS = 2, perfEma = 16, perfSlow = 0;
 function fit() { // the canvas takes the screen's shape, so a phone is filled edge to edge
   const coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
   W = Math.max(480, Math.min(900, Math.round(H * innerWidth / Math.max(1, innerHeight) / 2) * 2));
   const k = Math.min(innerWidth / W, innerHeight / H);
   const s = (k < 1 || coarse) ? k : Math.floor(k); viewScale = s; // a phone fills its screen; a desktop keeps whole-number pixels
-  canvas.width = W * AR_SCREEN; canvas.height = H * AR_SCREEN; // twice the pixels: the world is drawn in fine pixels, the HUD in logical ones
+  canvas.width = Math.round(W * RS); canvas.height = Math.round(H * RS); // the world in fine pixels, the HUD in logical ones
   canvas.style.width = (W * s) + 'px'; canvas.style.height = (H * s) + 'px';
   canvas.style.marginTop = Math.max(0, Math.floor((innerHeight - H * s) / 2)) + 'px';
   canvas.style.imageRendering = 'pixelated';
-  ctx.setTransform(AR_SCREEN, 0, 0, AR_SCREEN, 0, 0); ctx.imageSmoothingEnabled = false;
+  ctx.setTransform(RS, 0, 0, RS, 0, 0); ctx.imageSmoothingEnabled = false;
 }
 addEventListener('resize', fit); fit();
 
@@ -106,7 +108,7 @@ canvas.addEventListener('pointerdown', e => {
   startAudio(); const [x, y] = toLogical(e);
   if (e.pointerType === 'touch') TOUCH = true;
   if (TOUCH && scene === 'play' && state && !state.ui.map) {
-    const b = TBTN.find(q => Math.hypot(x - q.x, y - q.y) <= q.r + 4);
+    const b = TBTN.find(q => !q.hidden && Math.hypot(x - q.x, y - q.y) <= q.r + 4);
     if (b) { hit.add(b.c); b.lit = 0.15; e.preventDefault(); return; }
     if (x < W * 0.42 && y > H * 0.3 && stick.id === null && !state.ui.panel && !state.ui.menu) { stick.id = e.pointerId; stick.cx = x; stick.cy = y; stick.dx = stick.dy = 0; canvas.setPointerCapture(e.pointerId); return; }
     if (e.pointerType === 'touch') { pinch.set(e.pointerId, [x, y]); if (pinch.size === 2) { const [a, b] = [...pinch.values()]; pinchD = Math.max(1, Math.hypot(a[0] - b[0], a[1] - b[1])); pinchZ = ZOOM; mouse.click = false; return; } }
@@ -130,7 +132,8 @@ function startAudio() {
   }
   if (audio.ac.state === 'suspended') audio.ac.resume();
 }
-function setMuted(m) { muted = m; if (audio) audio.out.gain.value = m ? 0 : tune.volume; }
+let hostMuted = false; // PlayDrop's own sound switch
+function setMuted(m) { muted = m; if (audio) audio.out.gain.value = (m || hostMuted) ? 0 : tune.volume; }
 addEventListener('tune', () => setMuted(muted));
 function tone(freq, dur, type = 'square', vol = 0.3, delay = 0) {
   if (!audio || muted) return;
@@ -264,7 +267,7 @@ const scenes = {
 
 // ---- Loop: fixed step, frame time clamped ---------------------------------------------
 function step() {
-  scenes[scene].update(STEP); hit.clear();
+  if (!pdPaused) scenes[scene].update(STEP); hit.clear(); // PlayDrop's pause menu stops the world
 }
 let last, acc = 0, ALPHA = 1;
 function tick() {
@@ -273,7 +276,10 @@ function tick() {
   let n = 0; while (acc >= STEP && n < 4) { step(); acc -= STEP; n++; } // a slow phone never piles up steps
   if (acc > STEP) acc = 0;
   ALPHA = acc / STEP;
-  drawFrame();
+  const t0 = performance.now(); drawFrame(); const ft = performance.now() - t0;
+  // automatic quality: a device that keeps missing frames draws with fewer pixels
+  perfEma = perfEma * 0.85 + ft * 0.15;
+  if (scene === 'play' && perfEma > 22 && RS > 1) { if (++perfSlow > 30) { RS = RS > 1.6 ? 1.5 : 1; perfSlow = 0; perfEma = 14; fit(); } } else perfSlow = Math.max(0, perfSlow - 1);
 }
 function drawFrame() { hits.length = 0; scenes[scene].draw(); if (TOUCH && innerHeight > innerWidth) { ctx.fillStyle = 'rgba(8,10,16,0.85)'; ctx.fillRect(0, H / 2 - 16, W, 32); ptext(ctx, 'VIRE O CELULAR NA HORIZONTAL', W / 2, H / 2 - 6, '#f0d040', '#0b0d12', 2, 'center'); } }
 function frame() { tick(); requestAnimationFrame(frame); }
@@ -292,6 +298,29 @@ window.game = {
   },
 };
 
+// ---- PlayDrop: its loading screen, pause menu, sound switch and corner buttons -------------
+let PD = null, pdPaused = false, HUD_TL = { x: 0, y: 0 }, HUD_TR = { x: 0, y: 0 };
+function pdCorners(c) { // the host's buttons cover the top corners on phones: the HUD moves out from under them
+  const k = 1 / Math.max(0.01, viewScale), tl = c && c.topLeft, tr = c && c.topRight;
+  HUD_TL = { x: tl && tl.width ? Math.ceil(tl.width * k) + 2 : 0, y: 0 }; HUD_TR = { x: 0, y: tr && tr.height ? Math.ceil(tr.height * k) + 2 : 0 };
+}
+if (/(^|\.)playdrop\.ai$/.test(location.hostname)) {
+  const sc = document.createElement('script'); sc.src = 'https://assets.playdrop.ai/sdk/playdrop.js';
+  sc.onload = async () => {
+    try {
+      PD = await playdrop.init();
+      pdPaused = !!PD.host.isPaused;
+      PD.host.onPause(() => { pdPaused = true; down.clear(); });
+      PD.host.onResume(() => { pdPaused = false; last = clock.now(); acc = 0; });
+      const allow = a => { hostMuted = !a; setMuted(muted); if (a && audio) audio.ac.resume().catch(() => {}); };
+      allow(PD.host.audioAllowed !== false); if (PD.host.onAudioAllowedChange) PD.host.onAudioAllowedChange(allow);
+      pdCorners(PD.host.reservedCorners); if (PD.host.onReservedCornersChange) PD.host.onReservedCornersChange(pdCorners);
+      const pause = TBTN.find(b => b.c === 'KeyP'); if (pause) pause.hidden = true; // PlayDrop has its own pause
+      requestAnimationFrame(() => PD.host.ready());
+    } catch (e) { /* outside a PlayDrop page the game runs on its own */ }
+  };
+  document.head.appendChild(sc);
+}
 reset();
 prewarmSprites();
 scene = params.get('scene') || 'title';
