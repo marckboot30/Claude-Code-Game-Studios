@@ -438,18 +438,29 @@ function drawMap() {
 // ---- screens -------------------------------------------------------------------------------------
 function bigText(s, x, y, sc, col) { ptext(ctx, s, x, y, col, '#0b0d12', sc, 'center'); }
 function drawTitle() {
+  // the opening: made to be read on a phone first
   if (state && state.p) { drawWorld(); }
-  ctx.fillStyle = 'rgba(8,10,16,0.72)'; ctx.fillRect(0, 0, W, H);
-  bigText('OS ULTIMOS DIAS', W / 2, 40, 5, '#d8d0a0'); prect(ctx, W / 2 - 155, 70, 310, 1, '#6e1418');
-  ptext(ctx, 'SOBREVIVA O MAXIMO DE DIAS NUMA CIDADE INFESTADA', W / 2, 78, '#c8ccd6', '#0b0d12', 1, 'center');
-  const C = ['WASD ANDAR   SHIFT CORRER   C AGACHAR', 'CLIQUE OU ESPACO ATACAR   Q EMPURRAR', 'E VASCULHAR/USAR   TAB INVENTARIO   H SAUDE', 'B CONSTRUIR/BARRICAR   F LANTERNA   M MAPA', 'RODA DO MOUSE OU PINCA: ZOOM   P PAUSA   N SOM'];
-  C.forEach((c, k) => ptext(ctx, c, W / 2, 100 + k * 10, '#9aa2b0', '#0b0d12', 1, 'center'));
-  const z = [humanImg(Object.assign(zombieLook({ outfit: 0, kind: 'comum' }), { pose: 'walk', f: Math.floor(clock.now() * 4) % 4 })), humanImg(Object.assign(zombieLook({ outfit: 2, kind: 'gordo' }), { pose: 'walk', f: (Math.floor(clock.now() * 4) + 2) % 4 })), humanImg({ skin: '#e2a57c', hair: '#4a3020', under: '#eef0f2', pose: 'idle' })];
-  ctx.drawImage(z[0].c, 70, 176, 40, 56); ctx.drawImage(z[1].c, 30, 180, 40, 56); ctx.drawImage(z[2].c, W - 100, 176, 40, 56);
-  if (Math.floor(clock.now() * 2) % 2) ptext(ctx, TOUCH ? 'TOQUE PARA COMECAR' : 'ENTER PARA COMECAR', W / 2, 168, '#f0d040', '#0b0d12', 2, 'center');
+  ctx.fillStyle = 'rgba(8,10,16,0.76)'; ctx.fillRect(0, 0, W, H);
+  const T = 'OS ULTIMOS DIAS', ts = Math.max(5, Math.min(9, Math.floor((W - 40) / (textW(T) + 1)))), tw = textW(T, ts), tx = Math.round(W / 2 - Math.floor(tw / 2)), ty = 22;
+  ptext(ctx, T, W / 2, ty, '#e8dcae', '#0b0d12', ts, 'center');
+  const ux = tx + 3 * 4 * ts; prect(ctx, ux + 2 * ts, ty - 2 * ts, ts, ts, '#e8dcae'); prect(ctx, ux + ts, ty - ts, ts, ts, '#e8dcae'); // the accent on the U
+  prect(ctx, W / 2 - tw / 2, ty + 5 * ts + 8, tw, 2, '#6e1418');
+  ptext(ctx, 'SOBREVIVA O MAXIMO DE DIAS', W / 2, ty + 5 * ts + 18, '#c8a070', '#0b0d12', 2, 'center');
+  // the start button
+  const bw = Math.min(W - 40, 360), bh = 42, bx = W / 2 - bw / 2, by = ty + 5 * ts + 42, pulse = 0.5 + 0.5 * Math.sin(clock.now() * 4);
+  prect(ctx, bx - 2, by - 2, bw + 4, bh + 4, pulse > 0.5 ? '#f0d040' : '#a88a28'); prect(ctx, bx, by, bw, bh, '#4a3e14');
+  ptext(ctx, TOUCH ? 'TOQUE PARA COMECAR' : 'ENTER PARA COMECAR', W / 2, by + 11, '#f0d040', '#0b0d12', 3, 'center');
+  hitRect(bx, by, bw, bh, () => { mouse.click = true; });
+  // how to play, in large type
+  const lines = TOUCH ? ['ESQUERDA: ARRASTE PARA ANDAR', 'DIREITA: ATACAR, USAR, MOCHILA', 'DOIS DEDOS: APROXIMAR E AFASTAR'] : ['WASD ANDAR  SHIFT CORRER  E USAR', 'CLIQUE ATACAR  TAB MOCHILA  B CONSTRUIR', 'RODA DO MOUSE: APROXIMAR E AFASTAR'];
+  let ly = by + bh + 16; for (const ln of lines) { ptext(ctx, ln, W / 2, ly, '#c8ccd6', '#0b0d12', 2, 'center'); ly += 16; }
   let rec = 0; try { rec = +(localStorage.getItem('zonaMortaRecord') || 0); } catch (e) { rec = 0; }
-  if (rec > 0) ptext(ctx, `RECORDE: ${Math.floor(rec / 24)} DIAS E ${Math.floor(rec % 24)} HORAS`, W / 2, 190, '#e8c070', '#0b0d12', 1, 'center');
-  ptext(ctx, 'PIXEL ART ISOMETRICA - PROTOTIPO', W / 2, H - 10, '#4a4f5c', null, 1, 'center');
+  if (rec > 0) ptext(ctx, `RECORDE: ${Math.floor(rec / 24)} DIAS E ${Math.floor(rec % 24)} HORAS`, W / 2, H - 22, '#e8c070', '#0b0d12', 2, 'center');
+  // the dead on the left, you on the right
+  const f = Math.floor(clock.now() * 4) % 4;
+  const z1 = humanImg(Object.assign(zombieLook({ outfit: 0, kind: 'comum' }), { pose: 'walk', f })), z2 = humanImg(Object.assign(zombieLook({ outfit: 2, kind: 'gordo' }), { pose: 'walk', f: (f + 2) % 4 })), me = humanImg({ skin: '#e2a57c', hair: '#4a3020', under: '#eef0f2', pose: 'idle' });
+  const sw = 60, sh = 84, fy = H - sh - 8;
+  if (W >= 560) { ctx.drawImage(z2.c, 8, fy, sw, sh); ctx.drawImage(z1.c, 52, fy + 6, sw, sh); ctx.drawImage(me.c, W - sw - 14, fy, sw, sh); }
 }
 function drawCreate() {
   // big type and big buttons, so a phone can read and tap everything
