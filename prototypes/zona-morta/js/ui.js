@@ -147,6 +147,7 @@ function chunkImg(cx, cy) {
   return c;
 }
 function drawWorld() {
+  if (R3.on) { r3Draw(); ctx.setTransform(RS, 0, 0, RS, 0, 0); ctx.clearRect(0, 0, W, H); if (state.p) r3Overlay(); return; } // the 3D view draws the world; this canvas keeps only the HUD
   const p = state.p;
   const px = (p.x - p.y) * 16 * AR, py = (p.x + p.y) * 8 * AR;
   const VW = W * AR / ZOOM, VH = H * AR / ZOOM; // the view in art pixels
@@ -239,6 +240,7 @@ function miniLook() {
   ctx.restore();
 }
 function lighting() {
+  if (R3.on) return; // the 3D view lights itself
   const dl = daylight(); if (dl >= 0.999 && !state.lightTest) return;
   const DW = W, DH = H; // the light map is soft, so it is made at half the screen's pixels and stretched
   if (!lightCv || lightCv.width !== DW || lightCv.height !== DH) { lightCv = document.createElement('canvas'); lightCv.width = DW; lightCv.height = DH; lightCx = lightCv.getContext('2d'); }

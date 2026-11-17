@@ -9,3 +9,195 @@
 #   date: 2026-01-31
 #   ships: true               # false for a file only the build uses
 #   placeholder: true         # until it is replaced; leave the line out otherwise
+
+- path: vendor/three.module.min.js
+  origin: licensed
+  tool: "downloaded from cdn.jsdelivr.net (npm three@0.160.0, build/three.module.min.js)"
+  source: {vendor: "three.js authors", product: "three.js r160", url: "https://threejs.org"}
+  licence: {id: MIT}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/ground_atlas.jpg
+  origin: cc0
+  tool: "a PIL script packing 13 Poly Haven textures (1k diffuse, resized to 512) into a 4x4 atlas: sparse_grass, asphalt_02, concrete_tiles, dry_ground_01, farm_soil, wood_floor_worn, floor_tiles_06, floor_tiles_02, large_floor_tiles_02, concrete_floor_02, dirty_carpet, coast_sand_01, stony_dirt_path"
+  source: {vendor: "Poly Haven", product: "textures", url: "https://polyhaven.com/textures"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/blue_plaster_weathered_diff.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "blue_plaster_weathered", url: "https://polyhaven.com/a/blue_plaster_weathered"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/brick_wall_02_diff.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "brick_wall_02", url: "https://polyhaven.com/a/brick_wall_02"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/brown_planks_05_diff.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "brown_planks_05", url: "https://polyhaven.com/a/brown_planks_05"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/clay_roof_tiles_diff.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "clay_roof_tiles", url: "https://polyhaven.com/a/clay_roof_tiles"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/concrete_block_wall_diff.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "concrete_block_wall", url: "https://polyhaven.com/a/concrete_block_wall"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/corrugated_iron_02_diff.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "corrugated_iron_02", url: "https://polyhaven.com/a/corrugated_iron_02"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/corrugated_iron_diff.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "corrugated_iron", url: "https://polyhaven.com/a/corrugated_iron"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/distressed_painted_planks_diff.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "distressed_painted_planks", url: "https://polyhaven.com/a/distressed_painted_planks"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/grey_roof_tiles_diff.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "grey_roof_tiles", url: "https://polyhaven.com/a/grey_roof_tiles"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/painted_plaster_wall_diff.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "painted_plaster_wall", url: "https://polyhaven.com/a/painted_plaster_wall"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/white_plaster_rough_02_diff.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "white_plaster_rough_02", url: "https://polyhaven.com/a/white_plaster_rough_02"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/blue_plaster_weathered_nor.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "blue_plaster_weathered", url: "https://polyhaven.com/a/blue_plaster_weathered"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/brick_wall_02_nor.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "brick_wall_02", url: "https://polyhaven.com/a/brick_wall_02"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/brown_planks_05_nor.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "brown_planks_05", url: "https://polyhaven.com/a/brown_planks_05"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/clay_roof_tiles_nor.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "clay_roof_tiles", url: "https://polyhaven.com/a/clay_roof_tiles"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/concrete_block_wall_nor.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "concrete_block_wall", url: "https://polyhaven.com/a/concrete_block_wall"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/corrugated_iron_02_nor.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "corrugated_iron_02", url: "https://polyhaven.com/a/corrugated_iron_02"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/corrugated_iron_nor.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "corrugated_iron", url: "https://polyhaven.com/a/corrugated_iron"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/distressed_painted_planks_nor.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "distressed_painted_planks", url: "https://polyhaven.com/a/distressed_painted_planks"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/grey_roof_tiles_nor.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "grey_roof_tiles", url: "https://polyhaven.com/a/grey_roof_tiles"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/painted_plaster_wall_nor.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "painted_plaster_wall", url: "https://polyhaven.com/a/painted_plaster_wall"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true
+
+- path: assets/tex/white_plaster_rough_02_nor.jpg
+  origin: cc0
+  tool: "Poly Haven 1k jpg, resized to 512 with PIL"
+  source: {vendor: "Poly Haven", product: "white_plaster_rough_02", url: "https://polyhaven.com/a/white_plaster_rough_02"}
+  licence: {id: CC0-1.0}
+  date: 2026-11-17
+  ships: true

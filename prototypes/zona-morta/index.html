@@ -11,10 +11,18 @@
   html, body { margin: 0; height: 100%; background: #08090c; overflow: hidden; }
   body { font-variant-numeric: tabular-nums; }
   canvas { display: block; margin: 0 auto; cursor: crosshair; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #game { position: relative; z-index: 1; }
+  #g3d { position: absolute; z-index: 0; pointer-events: none; }
 </style>
 </head>
 <body>
+<canvas id="g3d"></canvas>
 <canvas id="game"></canvas>
+<script type="module">
+// three.js, for the 3D view; the game starts when it is here (or in 2D without it)
+import * as THREE from './vendor/three.module.min.js';
+window.THREE = THREE; window.dispatchEvent(new Event('three-ready'));
+</script>
 <script src="config.js"></script>
 <script>
 'use strict';
@@ -54,6 +62,7 @@ function fit() { // the canvas takes the screen's shape, so a phone is filled ed
   canvas.style.marginTop = Math.max(0, Math.floor((innerHeight - H * s) / 2)) + 'px';
   canvas.style.imageRendering = 'pixelated';
   ctx.setTransform(RS, 0, 0, RS, 0, 0); ctx.imageSmoothingEnabled = false;
+  if (typeof r3Resize === 'function') r3Resize();
 }
 addEventListener('resize', fit); fit();
 
@@ -149,6 +158,8 @@ function tone(freq, dur, type = 'square', vol = 0.3, delay = 0) {
 <script src="js/sim.js"></script>
 <script src="js/interact.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/r3models.js"></script>
+<script src="js/render3d.js"></script>
 <script>
 'use strict';
 // ---- Scenes -----------------------------------------------------------------------------
@@ -159,6 +170,7 @@ function reset() {
   // seed 0 in config.js: a new town and a new place to wake every game; ?seed= or a number there repeats one
   seed = Number(params.get('seed')) || CONFIG.seed || ((Date.now() % 2147483647) | 0);
   generateWorld();
+  r3Build();
   state = {
     t: 0, time: 0, killed: 0, dead: false, cause: '', gained: '', record: 0, deathT: 0,
     msgs: [], noises: [], subs: [], decals: [], near: [], targets: [], dayMarks: [],
@@ -323,13 +335,22 @@ if (/(^|\.)playdrop\.ai$/.test(location.hostname)) {
   };
   document.head.appendChild(sc);
 }
-reset();
-prewarmSprites();
-scene = params.get('scene') || 'title';
-if (scene === 'play') beginPlay();
-last = clock.now();
-if (params.get('manual') === '1') drawFrame();
-else { requestAnimationFrame(frame); setInterval(timer, 50); }
+// the game starts once three.js has loaded (the 3D view), or in 2D if it cannot
+let booted = false;
+function boot() {
+  if (booted) return; booted = true;
+  r3Init();
+  reset();
+  prewarmSprites();
+  scene = params.get('scene') || 'title';
+  if (scene === 'play') beginPlay();
+  last = clock.now();
+  if (params.get('manual') === '1') drawFrame();
+  else { requestAnimationFrame(frame); setInterval(timer, 50); }
+  window.game.ready = true;
+}
+if (window.THREE || params.get('look') === '2d') boot();
+else { addEventListener('three-ready', boot, { once: true }); setTimeout(boot, 6000); }
 </script>
 </body>
 </html>
