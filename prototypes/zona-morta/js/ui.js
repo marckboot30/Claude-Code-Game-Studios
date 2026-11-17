@@ -340,7 +340,7 @@ function drawHUD() {
   if (state.ui.map) drawMap();
   if (TOUCH && !state.ui.map) drawTouch();
   // frames per second and the drawing quality, small at the top: what a player reports when it stutters
-  { const fps = Math.round(fpsShow); ptext(ctx, `${fps} FPS  QUALIDADE ${RS === 2 ? 'ALTA' : RS > 1 ? 'MEDIA' : 'BAIXA'}`, W / 2, 3, fps >= 45 ? '#7ac050' : fps >= 25 ? '#e8c040' : '#ff6060', '#0b0d12', 1, 'center'); }
+  { const fps = Math.round(fpsShow); ptext(ctx, `${fps} FPS  QUALIDADE ${R3.on ? r3QualityName() : RS === 2 ? 'ALTA' : RS > 1 ? 'MEDIA' : 'BAIXA'}`, W / 2, 3, fps >= 45 ? '#7ac050' : fps >= 25 ? '#e8c040' : '#ff6060', '#0b0d12', 1, 'center'); }
   if (state.zoomShow > 0) ptext(ctx, `ZOOM ${ZOOM.toFixed(1)}X`, W / 2, 30, '#f0d040', '#0b0d12', 2, 'center');
   if (p.hurt > 0) { ctx.fillStyle = `rgba(200,20,20,${p.hurt * 0.5})`; ctx.fillRect(0, 0, W, H); }
   if (p.sleeping) { ctx.fillStyle = 'rgba(0,0,10,0.45)'; ctx.fillRect(0, 0, W, H); ptext(ctx, 'DORMINDO...  (MEXA-SE PARA ACORDAR)', W / 2, H / 2 - 30, '#b8a0e0', '#0b0d12', 1, 'center'); }
@@ -488,7 +488,10 @@ function bigText(s, x, y, sc, col) { ptext(ctx, s, x, y, col, '#0b0d12', sc, 'ce
 function drawTitle() {
   // the opening: made to be read on a phone first
   if (state && state.p) { drawWorld(); }
-  ctx.fillStyle = 'rgba(8,10,16,0.76)'; ctx.fillRect(0, 0, W, H);
+  if (R3.on) { // the 3D town shows through: dark only at the top and the bottom, where the words are
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(8,10,16,0.82)'); g.addColorStop(0.42, 'rgba(8,10,16,0.45)'); g.addColorStop(0.62, 'rgba(8,10,16,0.25)'); g.addColorStop(1, 'rgba(8,10,16,0.8)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  } else { ctx.fillStyle = 'rgba(8,10,16,0.76)'; ctx.fillRect(0, 0, W, H); }
   const T = 'OS ULTIMOS DIAS', ts = Math.max(5, Math.min(9, Math.floor((W - 40) / (textW(T) + 1)))), tw = textW(T, ts), tx = Math.round(W / 2 - Math.floor(tw / 2)), ty = 22;
   ptext(ctx, T, W / 2, ty, '#e8dcae', '#0b0d12', ts, 'center');
   const ux = tx + 3 * 4 * ts; prect(ctx, ux + 2 * ts, ty - 2 * ts, ts, ts, '#e8dcae'); prect(ctx, ux + ts, ty - ts, ts, ts, '#e8dcae'); // the accent on the U
@@ -508,11 +511,13 @@ function drawTitle() {
   const f = Math.floor(clock.now() * 4) % 4;
   const z1 = humanImg(Object.assign(zombieLook({ outfit: 0, kind: 'comum' }), { pose: 'walk', f })), z2 = humanImg(Object.assign(zombieLook({ outfit: 2, kind: 'gordo' }), { pose: 'walk', f: (f + 2) % 4 })), me = humanImg({ skin: '#e2a57c', hair: '#4a3020', under: '#eef0f2', pose: 'idle' });
   const sw = 60, sh = 84, fy = H - sh - 8;
-  if (W >= 560) { ctx.drawImage(z2.c, 8, fy, sw, sh); ctx.drawImage(z1.c, 52, fy + 6, sw, sh); ctx.drawImage(me.c, W - sw - 14, fy, sw, sh); }
+  if (W >= 560 && !R3.on) { ctx.drawImage(z2.c, 8, fy, sw, sh); ctx.drawImage(z1.c, 52, fy + 6, sw, sh); ctx.drawImage(me.c, W - sw - 14, fy, sw, sh); }
 }
 function drawCreate() {
   // big type and big buttons, so a phone can read and tap everything
-  drawWorld(); ctx.fillStyle = 'rgba(8,10,16,0.9)'; ctx.fillRect(0, 0, W, H);
+  drawWorld();
+  if (R3.on) { const g = ctx.createLinearGradient(0, 0, W, 0); g.addColorStop(0, 'rgba(8,10,16,0.92)'); g.addColorStop(0.62, 'rgba(8,10,16,0.86)'); g.addColorStop(0.8, 'rgba(8,10,16,0.15)'); g.addColorStop(1, 'rgba(8,10,16,0.1)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
+  else { ctx.fillStyle = 'rgba(8,10,16,0.9)'; ctx.fillRect(0, 0, W, H); }
   const c = state.create, pts = createPoints(), m = 10, gap = 8, charW = 110;
   const colW = Math.floor((W - 2 * m - charW - 2 * gap) / 3), x1 = m, x2 = x1 + colW + gap, x3 = x2 + colW + gap, rowH = 34, y0 = 52;
   bigText('SEU SOBREVIVENTE', W / 2, 6, 3, '#d8d0a0');
@@ -540,8 +545,7 @@ function drawCreate() {
   ptext(ctx, 'VANTAGEM GASTA PONTOS, DEFEITO DA PONTOS.', x1 + 2, H - 14, '#8a8f9c', '#0b0d12', 1.5);
   // the survivor, standing on the right, above the start button
   const im = humanImg({ skin: '#e2a57c', hair: '#4a3020', under: '#eef0f2', pose: 'idle' }), sw = 72, sh = 100, sx = W - m - charW / 2 - sw / 2;
-  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(W - m - charW / 2, y0 + 150, 26, 6, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.drawImage(im.c, Math.round(sx), y0 + 150 - sh + 6, sw, sh);
+  if (!R3.on) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(W - m - charW / 2, y0 + 150, 26, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.drawImage(im.c, Math.round(sx), y0 + 150 - sh + 6, sw, sh); } // in 3D the survivor stands there for real
   const bw = Math.max(charW + 40, 170), bx = W - m - bw, by = H - 42, bh = 34;
   prect(ctx, bx, by, bw, bh, pts >= 0 ? '#6a5618' : '#4a1818'); prect(ctx, bx, by, bw, 2, '#f0d040'); prect(ctx, bx, by + bh - 2, bw, 2, '#0b0d12');
   ptext(ctx, pts >= 0 ? 'COMECAR' : 'TIRE UMA VANTAGEM', bx + bw / 2, by + 8, pts >= 0 ? '#f0d040' : '#ff6060', '#0b0d12', pts >= 0 ? 3 : 2, 'center');

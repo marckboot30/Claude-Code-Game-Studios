@@ -159,6 +159,7 @@ function tone(freq, dur, type = 'square', vol = 0.3, delay = 0) {
 <script src="js/interact.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/r3models.js"></script>
+<script src="js/r3people.js"></script>
 <script src="js/render3d.js"></script>
 <script>
 'use strict';
@@ -293,7 +294,10 @@ function tick() {
   fpsN++; fpsT += 1; if (now - (tick.t0 || 0) >= 1) { fpsShow = fpsN / Math.max(0.001, now - (tick.t0 || now - 1)); fpsN = 0; tick.t0 = now; } // frames per second, shown on screen
   // automatic quality: a device that keeps missing frames draws with fewer pixels
   perfEma = perfEma * 0.85 + ft * 0.15;
-  if (scene === 'play' && perfEma > 22 && RS > 1) { if (++perfSlow > 30) { RS = RS > 1.6 ? 1.5 : 1; perfSlow = 0; perfEma = 14; fit(); } } else perfSlow = Math.max(0, perfSlow - 1);
+  if (R3.on) { // 3D: judged by frames per second, since the drawing happens on the graphics chip
+    if (scene === 'play' && !pdPaused && fpsShow < 40) { tick.slowT = (tick.slowT || 0) + Math.min(0.25, now - (tick.prevNow || now)); if (tick.slowT > 3) { tick.slowT = 0; r3QualityDown(); fpsShow = 60; } } else tick.slowT = 0;
+    tick.prevNow = now;
+  } else if (scene === 'play' && perfEma > 22 && RS > 1) { if (++perfSlow > 30) { RS = RS > 1.6 ? 1.5 : 1; perfSlow = 0; perfEma = 14; fit(); } } else perfSlow = Math.max(0, perfSlow - 1);
 }
 function drawFrame() { hits.length = 0; scenes[scene].draw(); if (TOUCH && innerHeight > innerWidth) { ctx.fillStyle = 'rgba(8,10,16,0.85)'; ctx.fillRect(0, H / 2 - 16, W, 32); ptext(ctx, 'VIRE O CELULAR NA HORIZONTAL', W / 2, H / 2 - 6, '#f0d040', '#0b0d12', 2, 'center'); } }
 function frame() { tick(); requestAnimationFrame(frame); }

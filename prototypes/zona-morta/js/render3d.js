@@ -32,6 +32,10 @@ function r3Init() {
   R3.sun.shadow.mapSize.set(2048, 2048); Object.assign(R3.sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 120 });
   R3.sun.shadow.bias = -0.0004; R3.sun.shadow.normalBias = 0.03;
   R3.scene.add(R3.sun, R3.sun.target);
+  // the night's lights: a fixed pool (the count never changes, so no shader rebuilds), given to the nearest lamps, fires and rooms
+  R3.pool = []; for (let k = 0; k < 6; k++) { const l = new T.PointLight('#ffb060', 0, 7, 1.6); R3.pool.push(l); R3.scene.add(l); }
+  R3.torch = new T.SpotLight('#fff2d8', 0, 16, 0.5, 0.45, 1.2); R3.torch.castShadow = true; R3.torch.shadow.mapSize.set(1024, 1024); R3.scene.add(R3.torch, R3.torch.target);
+  R3.sky = { day: new T.Color('#8ea4b4'), dusk: new T.Color('#c08a64'), night: new T.Color('#0a0e18') };
   // textures
   const TL = new T.TextureLoader(), tex = (n, srgb, rep = 1) => { const t = TL.load('assets/tex/' + n + '.jpg'); t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = T.SRGBColorSpace; t.repeat.set(rep, rep); return t; };
   R3.atlas = TL.load('assets/tex/ground_atlas.jpg'); R3.atlas.colorSpace = T.SRGBColorSpace; R3.atlas.flipY = false; R3.atlas.anisotropy = 8;
@@ -51,6 +55,7 @@ function r3Init() {
   R3.mats = {
     wood: surf('brown_planks_05'), door: new T.MeshStandardMaterial({ color: '#6a4a30', roughness: 0.7 }), frame: new T.MeshStandardMaterial({ color: '#e8e4da', roughness: 0.6 }),
     glass: new T.MeshStandardMaterial({ color: '#9ab4c8', roughness: 0.05, metalness: 0.6, transparent: true, opacity: 0.45 }),
+    glassLit: new T.MeshStandardMaterial({ color: '#ffd8a0', emissive: '#ffb860', emissiveIntensity: 1.4, roughness: 0.2 }),
     plank: new T.MeshStandardMaterial({ color: '#8a6440', roughness: 0.9 }), fence: new T.MeshStandardMaterial({ color: '#6e5a44', roughness: 0.95 }),
     player: new T.MeshStandardMaterial({ color: '#d8a888' }), zombie: new T.MeshStandardMaterial({ color: '#7a8a62' }),
   };
@@ -115,9 +120,8 @@ function r3Build() {
   R3.edges = new Map(); R3.bmesh = []; R3.cutKey = ''; R3.edgeT = 0; R3.chunks = new Map(); R3.chunkT = 0; R3.last = null;
   r3Ground();
   for (const b of world.buildings) { R3.bmesh[b.id] = r3BuildingMeshes(b, null); r3Roof(b); }
-  // placeholders until the figures are made (step 3)
-  R3.pl = new T.Mesh(new T.CapsuleGeometry(0.2, 0.5, 4, 10), R3.mats.player); R3.pl.castShadow = true; R3.root.add(R3.pl);
-  R3.zpool = []; R3.items = []; R3.blood = []; R3.iconTex = new Map();
+  r3PeopleInit(T);
+  R3.items = []; R3.blood = []; R3.iconTex = new Map();
 }
 
 // ---- things on tiles, merged per 16 by 16 chunk ----------------------------------------------------
@@ -252,7 +256,7 @@ function r3Ground() {
           diffuseColor *= tx;`)
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nif (ty == 12.0) roughnessFactor = 0.06; else if (ty == 5.0 || ty == 6.0 || ty == 7.0 || ty == 8.0) roughnessFactor = 0.55;');
   };
-  const g = new T.Mesh(new T.PlaneGeometry(N, N).rotateX(-Math.PI / 2), mat); g.position.set(N / 2, 0, N / 2); g.receiveShadow = true; R3.root.add(g);
+  const g = new T.Mesh(new T.PlaneGeometry(N, N).rotateX(-Math.PI / 2), mat); g.position.set(N / 2, 0, N / 2); g.receiveShadow = true; R3.root.add(g); R3.groundMesh = g;
   // beyond the map: plain grass to the horizon
   const far = new T.Mesh(new T.PlaneGeometry(N * 6, N * 6).rotateX(-Math.PI / 2), new T.MeshStandardMaterial({ color: '#3e4a26', roughness: 1 })); far.position.set(N / 2, -0.02, N / 2); R3.root.add(far);
 }
@@ -319,7 +323,8 @@ function r3Roof(b) {
 }
 
 // ---- doors, windows, fences, built walls: small meshes that follow their state -------------------
-function r3EdgeKey(e, cut) { return [e.kind, e.door ? (e.broken ? 'x' : e.open ? 'o' : 'c') : '', e.win ? e.glass : '', e.barr || 0, cut ? 1 : 0].join(); }
+function r3Lit(e) { const B = world.buildings[e.b]; return !!(B && B.powered && daylight() < 0.5); }
+function r3EdgeKey(e, cut) { return [r3Lit(e) ? 'L' : '', e.kind, e.door ? (e.broken ? 'x' : e.open ? 'o' : 'c') : '', e.win ? e.glass : '', e.barr || 0, cut ? 1 : 0].join(); }
 function r3EdgeObj(e, cut) {
   const T = R3.T, grp = new T.Group(), L = e.dir === 'V', c = L ? e.i : e.j, a = L ? e.j : e.i;
   const box = (mat, k0, y0, s0, k1, y1, s1) => { const g = r3Geo(); if (L) r3Box(g, k0, y0, s0, k1, y1, s1); else r3Box(g, s0, y0, k0, s1, y1, k1); const m = r3Mesh(g, mat); grp.add(m); return m; };
@@ -345,7 +350,7 @@ function r3EdgeObj(e, cut) {
     if (!cut) {
       box(R3.mats.frame, c - ht, SILL3, a, c + ht, SILL3 + 0.05, a + 1); box(R3.mats.frame, c - ht, HEAD3 - 0.05, a, c + ht, HEAD3, a + 1);
       box(R3.mats.frame, c - ht, SILL3, a, c + ht, HEAD3, a + 0.06); box(R3.mats.frame, c - ht, SILL3, a + 0.94, c + ht, HEAD3, a + 1);
-      if (e.glass === 'ok') box(R3.mats.glass, c - 0.01, SILL3 + 0.05, a + 0.06, c + 0.01, HEAD3 - 0.05, a + 0.94);
+      if (e.glass === 'ok') box(r3Lit(e) ? R3.mats.glassLit : R3.mats.glass, c - 0.01, SILL3 + 0.05, a + 0.06, c + 0.01, HEAD3 - 0.05, a + 0.94);
     }
     void top;
   }
@@ -381,7 +386,8 @@ function r3EdgeCut(e) {
 /** Draws the 3D view for this frame. */
 function r3Draw() {
   const T = R3.T, p = state.p;
-  const b = buildingAt(p.x, p.y), cb = b ? b.id : -1;
+  const inGame = scene === 'play' || scene === 'pause';
+  const b = inGame ? buildingAt(p.x, p.y) : null, cb = b ? b.id : -1; // the opening sees the town whole, roofs on
   // inside a building: its walls are rebuilt cut on your camera side, its roof hidden
   const key = cb + ':' + Math.floor(p.x) + ':' + Math.floor(p.y);
   if (key !== R3.cutKey) {
@@ -405,19 +411,22 @@ function r3Draw() {
     if (o.end) o.end.visible = B.id !== cb;
     for (const m of [o.ext, o.inn, o.roof, o.end]) if (m) m.material = fade ? r3Faded(m.userData.base) : m.userData.base;
   }
-  // placeholders for the figures
-  R3.pl.position.set(p.x, 0.45, p.y);
-  let k = 0;
-  for (const z of state.near) {
-    if (!z.visible && !z.dead) continue;
-    let m = R3.zpool[k]; if (!m) { m = new T.Mesh(new T.CapsuleGeometry(0.19, 0.5, 4, 8), R3.mats.zombie); m.castShadow = true; R3.root.add(m); R3.zpool.push(m); }
-    m.visible = true; m.position.set(z.x, z.dead ? 0.15 : 0.45, z.y); m.rotation.set(z.dead ? Math.PI / 2 : 0, 0, 0); k++;
-  }
-  for (; k < R3.zpool.length; k++) R3.zpool[k].visible = false;
-  // the camera: above and behind on the +i+j side, as the 2D view
-  const dist = 17 / ZOOM, t = new T.Vector3(p.x, 0.4, p.y);
-  R3.cam.position.set(t.x + dist * 0.5, t.y + dist * 1.05, t.z + dist * 0.5); R3.cam.lookAt(t);
-  R3.sun.position.set(t.x + 20, 34, t.z - 6); // from the right, so the faces the camera sees are lit R3.sun.target.position.copy(t); R3.sun.target.updateMatrixWorld();
+  r3DrawPeople();
+  // the camera: above and behind on the +i+j side, as the 2D view; the opening circles the place you wake;
+  // the survivor screen looks you in the face, framed on the right
+  const t = new T.Vector3(p.x, 0.4, p.y);
+  if (scene === 'title' || scene === 'over') { const a = clock.now() * 0.07, r = 7.5; R3.cam.fov = 40; R3.cam.position.set(t.x + Math.cos(a) * r, 4.2, t.z + Math.sin(a) * r); R3.cam.lookAt(t.x, 0.6, t.z); }
+  else if (scene === 'criar') {
+    R3.cam.fov = 30; const f = p.dir, fx = f[0] || 0.7, fz = f[1] || 0.7, fl = Math.hypot(fx, fz) || 1, ux = fx / fl, uz = fz / fl;
+    // in front of the face, a little to one side, so the figure sits on the right of the screen
+    R3.cam.position.set(p.x + ux * 3.1 - uz * 1.25, 0.62, p.y + uz * 3.1 + ux * 1.25); R3.cam.lookAt(p.x - uz * 1.25 + ux * 0.2, 0.44, p.y + ux * 1.25 + uz * 0.2);
+  } else { const dist = 8 / ZOOM; R3.cam.fov = 38; R3.cam.position.set(t.x + dist * 0.5, t.y + dist * 1.05, t.z + dist * 0.5); R3.cam.lookAt(t); }
+  R3.cam.updateProjectionMatrix();
+  r3Light(t);
+  // the survivor screen is a studio: only you, on the ground, against the dark
+  const studio = scene === 'criar';
+  if (studio !== !!R3.studio) { R3.studio = studio; const keep = new Set(Object.values(R3.people.parts)); keep.add(R3.groundMesh); for (const o of R3.root.children) if (!keep.has(o)) o.visible = !studio; R3.scene.background.set('#0b0d12'); }
+  if (studio) { R3.scene.background.set('#14171e'); R3.hemi.intensity = 2.0; R3.hemi.color.set('#fff4e8'); R3.sun.intensity = 2.6; R3.sun.color.set('#fff0e0'); R3.sun.position.set(p.x + R3.cam.position.x - p.x + 2, 6, p.y + R3.cam.position.z - p.y - 1); R3.renderer.toneMappingExposure = 1.15; for (const l of R3.pool) l.intensity = 0; }
   // the see-through window: where you are on screen, and how deep
   R3.cam.updateMatrixWorld(); const hp = R3.v.set(p.x, 0.5, p.y).project(R3.cam), dpr = R3.renderer.getPixelRatio(), cw = R3.renderer.domElement.width, ch = R3.renderer.domElement.height;
   R3.hole.uP.value.set((hp.x + 1) / 2 * cw, (hp.y + 1) / 2 * ch); R3.hole.uR.value = 70 * dpr * Math.max(0.8, ZOOM); R3.hole.uZ.value = hp.z * 0.5 + 0.5 - 0.0004;
@@ -465,3 +474,76 @@ function r3Overlay() {
     else poly([isoV(t.i, t.j), isoV(t.i + 1, t.j), isoV(t.i + 1, t.j + 1), isoV(t.i, t.j + 1)]);
   }
 }
+
+// the survivor, the zombies and the animals
+function r3DrawPeople() {
+  const p = state.p;
+  r3PeopleBegin();
+  // the survivor: the same poses as the 2D view's
+  const a = p.action, anim = a ? a.anim : null;
+  const o = { x: p.x, y: p.y, face: Math.atan2(p.dir[0], p.dir[1]), look: playerLook(p), ph: (p.ft || 0) * Math.PI / 2, t: state.t, pose: '' };
+  if (p.sleeping) { const b = a && a.bed; o.lying = true; o.sleep = true; if (b) { o.x = b.i + 0.5; o.y = b.j + 0.5; } }
+  else if (anim === 'sit') o.pose = 'sit';
+  else if (anim === 'read') o.pose = 'read';
+  else if (anim === 'bandage') o.pose = 'bandage';
+  else if (anim === 'search') o.pose = 'search';
+  else if (p.swing > 0) { o.pose = 'attack'; o.swing = Math.min(1, p.swing / 0.3); }
+  else if (anim === 'hammer' || anim === 'chop') { o.pose = 'attack'; o.swing = (Math.sin(state.t * 10) + 1) / 2; }
+  else if (p.crouch || anim === 'crouch') o.pose = 'crouch';
+  else if (p.moving) o.pose = p.run ? 'run' : 'walk';
+  if (p.hand && !['sit', 'read', 'bandage', 'search'].includes(o.pose)) { o.weapon = true; o.weaponCol = /faca|machado|cano|chave|pe_de|facao/.test(p.hand.id) ? '#9aa0a6' : '#6a5038'; }
+  if (!state.dead || state.deathT < 0.01) r3Figure(o); else r3Figure(Object.assign(o, { lying: true, pose: '' }));
+  // zombies near you that you can see, and every body on the ground
+  for (const z of state.near) {
+    if (!z.visible && !z.dead) continue;
+    const K = ZKINDS[z.kind];
+    const f = { x: z.x, y: z.y, face: Math.atan2(z.dirx || 0.7, z.diry || 0.7), look: zombieLook(z), zombie: true, fat: !!K.fat, ph: (z.ft || 0) * Math.PI / 2, pose: z.attackPose ? 'attack' : z.moving ? 'walk' : '', atk: z.atk || 0 };
+    if (K.crawl) { f.lying = true; f.prone = true; f.crawl = !z.dead; }
+    else if (z.dead || z.down > 0) f.lying = true;
+    r3Figure(f);
+  }
+  r3PeopleEnd();
+  for (const an of world.animals) {
+    const near = Math.abs(an.x - p.x) < 26 && Math.abs(an.y - p.y) < 26;
+    if (near) r3Animal(an); else if (an._r3) an._r3.visible = false;
+  }
+}
+
+// ---- light by the hour, and the night's lamps -------------------------------------------------------
+function r3Light(t) {
+  const T = R3.T, p = state.p, h = hourOf(state.time);
+  let dl = daylight();
+  if (scene === 'title') dl = 0.55; // the opening is at dusk
+  const warm = (h > 16 || h < 8 || scene === 'title') ? Math.max(0, 1 - Math.abs(dl - 0.5) * 2) : 0; // the low sun is orange
+  R3.sun.position.set(t.x + 20, 6 + 30 * dl, t.z - 6); R3.sun.target.position.copy(t); R3.sun.target.updateMatrixWorld();
+  R3.sun.intensity = 0.25 + 2.9 * dl; R3.sun.color.setRGB(1, 0.94 - warm * 0.3, 0.85 - warm * 0.45).lerp(R3.sky.moon || (R3.sky.moon = new T.Color('#8aa0e0')), (1 - dl) * 0.85);
+  R3.hemi.intensity = 0.18 + 1.55 * dl; R3.hemi.color.set('#d8e6ff').lerp(R3.sky.hn || (R3.sky.hn = new T.Color('#4a5a8a')), 1 - dl);
+  const sky = R3.scene.background; sky.copy(R3.sky.night).lerp(R3.sky.day, dl).lerp(R3.sky.dusk, warm * 0.5);
+  R3.renderer.toneMappingExposure = 1.2 + (1 - dl) * 0.35;
+  // the lights near you: fires, lamps (while there is power), lit rooms, TVs, generators
+  const night = 1 - dl, L = [];
+  if (night > 0.05) {
+    const near = (x, y, r) => Math.abs(x - p.x) < r && Math.abs(y - p.y) < r;
+    for (const f of state.fires) if (f.fuel > 0 && near(f.i, f.j, 20)) L.push([f.i + 0.5, 0.4, f.j + 0.5, '#ff9a40', 7 + Math.sin(state.t * 9) * 0.8, 6]);
+    if (powerOn()) for (const [i, j] of world.lamps) if (near(i, j, 22)) L.push([i + 0.5, 1.9, j - 0.2, '#ffc070', 9, 8]);
+    for (const B of world.buildings) if (B.powered && near(B.x0, B.y0, 18)) for (const [i, j] of B.lights) L.push([i, 1.1, j, '#ffd8a0', 5, 5]);
+    for (const tv of state.radios) if (tv.t === 'tv' && tv.on && near(tv.i, tv.j, 16)) L.push([tv.i + 0.5, 0.5, tv.j + 0.5, '#8ab8ff', 2.5, 3]);
+    for (const g of state.gens) if (g.on && near(g.i, g.j, 16)) L.push([g.i + 0.5, 0.4, g.j + 0.5, '#a0ffa0', 1.5, 2]);
+    L.sort((a, b) => Math.hypot(a[0] - p.x, a[2] - p.y) - Math.hypot(b[0] - p.x, b[2] - p.y));
+  }
+  R3.pool.forEach((l, k) => { const q = L[k]; if (!q) { l.intensity = 0; return; } l.position.set(q[0], q[1], q[2]); l.color.set(q[3]); l.intensity = q[4] * night * 7; l.distance = q[5] * 1.3; });
+  // the flashlight
+  const on = p.light && hasTool(p, 'lanterna') && scene === 'play';
+  R3.torch.intensity = on ? 40 : 0;
+  if (on) { const d = p.dir; R3.torch.position.set(p.x + d[0] * 0.15, 0.62, p.y + d[1] * 0.15); R3.torch.target.position.set(p.x + d[0] * 6, 0, p.y + d[1] * 6); R3.torch.target.updateMatrixWorld(); }
+}
+
+// ---- automatic quality: a device that cannot keep up draws fewer pixels, then drops the shadows ------
+const R3_Q = [1.5, 1.25, 1, 0.85, 0.7];
+function r3QualityDown() {
+  const k = R3_Q.findIndex(q => q < R3.q - 0.01);
+  if (k >= 0) { R3.q = Math.min(R3_Q[k], window.devicePixelRatio || 1); r3Resize(); return true; }
+  if (R3.renderer.shadowMap.enabled) { R3.renderer.shadowMap.enabled = false; R3.scene.traverse(o => { if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach(m => { m.needsUpdate = true; }); } }); return true; }
+  return false;
+}
+function r3QualityName() { return !R3.renderer.shadowMap.enabled ? 'BAIXA' : R3.q >= 1.25 ? 'ALTA' : 'MEDIA'; }

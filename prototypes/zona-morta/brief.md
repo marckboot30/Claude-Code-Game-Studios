@@ -40,6 +40,15 @@ Temos que fazer com que o jogado nascer em lugares aleatórios
 Temos que melhorar a aparência das árvores temos que reduzir um poucos
 Temos que alimentar mais o nosso mundo está muito pequeno
 Deixa a aparência das árvores assim 🌳
+Veja essa imagem deixa o nosso jogo com essa quantidade de gráficos
+Vamos só fazer um teste de imagem só pra ver ser vc chegar perto dessa quantidade
+Faz um teste em 3d numa imagem do jogo pra nós compara a diferença mais não muda nada do jogo ainda e só um teste pra nós tentar encontrar uma qualidade melhor pro nosso jogo
+Temos outro estilo de gráfico pra nós fazer teste?
+Fassa esse teste com a mesma quantidade que e usado no pubg
+Testa com o 3d realista
+Eu vi que os carros não estão em 3d realista tem como deixar eles Tam queria ver como ficaria
+Ok vamos deixa. tudo nosso jogo em 3d realista e vamos deixa a câmera de cima
+Tem que deixa tudo em 3d realista até a abertura do jogo
 
 **Pitch:** Você acorda só de cueca, sem nada, numa cidade grande infestada, e vai de casa em casa — condomínios, galpões, fazendas, posto, hospital, biblioteca, corpo de bombeiros — juntando roupa, comida, livros e um machado, barricando a base antes que a horda quebre as janelas; no fim só conta quantos dias você aguentou.
 
@@ -54,9 +63,9 @@ Deixa a aparência das árvores assim 🌳
 **Intent:** no goal to reach *(you said)*
 
 ## Look and references
-- Look: pixel art limpo, isométrico 2:1 em baixa resolução com escala inteira, sem suavização, contorno escuro de 1px. Prédios em corte como na imagem do corpo de bombeiros: o prédio onde você está perde o teto e mostra os cômodos e móveis; paredes de trás altas, da frente baixas; muro de tijolo vermelho, pisos de madeira, azulejo e concreto. Paleta: grama verde-oliva, asfalto cinza-azulado, telhados tijolo e azul, zumbis verde-acinzentados, sangue vinho, itens em cores quentes. Noite em azul profundo com dither, só a lanterna e as lâmpadas iluminam. Todas as figuras desenhadas, nada de emoji ou círculos simples. Visual das imagens de prévia aprovadas.
+- Look: 3D realista visto de cima (three.js): chão, paredes e telhados com texturas fotográficas (Poly Haven, CC0), sol com sombras que muda com a hora, noite escura com lanterna, postes, fogueiras e janelas acesas. Prédios em corte como na imagem do corpo de bombeiros: o prédio onde você está perde o teto e as paredes do lado da câmera abaixam; prédios que escondem você ficam transparentes, copas de árvore abrem uma janela em volta de você. Sobrevivente e zumbis em 3D com articulações e roupas nas cores do que vestem. Abertura em 3D ao entardecer; tela do sobrevivente mostra você em pé, em 3D, à direita. O pixel art antigo fica guardado como reserva (?look=2d). *(antes: pixel art limpo isométrico)*
 - References: imagem do corpo de bombeiros enviada (prédio em corte, cômodos à vista); Project Zomboid (a dinâmica: saque, necessidades, barulho, uma vida só, barricadas, livros de habilidade; Avoid: nome, arte, mapa, ícones e interface).
-- View: 2D isométrico · Camera: segue o jogador de cima em diagonal, zoom em passos inteiros
+- View: 3D · Camera: segue o jogador de cima em diagonal, zoom livre (pinça no celular, roda do mouse no PC)
 
 ## First minute
 Você acorda só de cueca num lugar sorteado a cada partida (uma casa, um condomínio, uma fazenda ou o corpo de bombeiros), tremendo, com o moodle de frio aceso. Um brilho no armário ensina o E: a barrinha sobe em cima da cabeça e sai uma camiseta e calça; vestir baixa o frio e sobe a proteção. Outro armário tem o machado. Lá fora, você corre, um anel de barulho se espalha e dois zumbis lentos viram na sua direção; você mata um com o machado. Corta uma árvore, as toras viram tábuas, e quando o céu alaranja você prega a primeira tábua na janela — à noite os zumbis batem nela e ela aguenta.
