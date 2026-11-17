@@ -133,6 +133,19 @@ function drawEntity(en) {
   }
 }
 function shadow(x, y, w = 5) { ctx.fillStyle = 'rgba(0,0,0,0.26)'; ctx.beginPath(); ctx.ellipse(x, y, (w + 0.5) * AR, 1.6 * AR, 0, 0, Math.PI * 2); ctx.fill(); }
+// the ground never changes, so it is drawn once per 8x8-tile chunk and reused (water and glass go on top)
+const CH = 8, chunkCache = new Map();
+function chunkImg(cx, cy) {
+  const key = cx * 100 + cy; let c = chunkCache.get(key);
+  if (c) { chunkCache.delete(key); chunkCache.set(key, c); return c; } // most recently used last
+  const TX = 16 * AR, TY = 8 * AR; c = mkCanvas(CH * 2 * TX, CH * 2 * TY); const x = c.getContext('2d');
+  for (let li = 0; li < CH; li++) for (let lj = 0; lj < CH; lj++) {
+    const i = cx * CH + li, j = cy * CH + lj; if (!inMap(i, j)) continue;
+    const k = idx(i, j); x.drawImage(floorImg(world.floor[k], world.fv[k]), (li - lj) * TX + CH * TX - TX, (li + lj) * TY);
+  }
+  chunkCache.set(key, c); if (chunkCache.size > 36) chunkCache.delete(chunkCache.keys().next().value);
+  return c;
+}
 function drawWorld() {
   const p = state.p;
   const px = (p.x - p.y) * 16 * AR, py = (p.x + p.y) * 8 * AR;
@@ -152,14 +165,19 @@ function drawWorld() {
   const TX = 16 * AR, TY = 8 * AR;
   const s0 = Math.floor((camY - 30 * AR) / TY), s1 = Math.ceil((camY + VH + 90 * AR) / TY), d0 = Math.floor((camX - 40 * AR) / TX), d1 = Math.ceil((camX + VW + 40 * AR) / TX);
   const wf = Math.floor(state.t * 1.5);
-  // floors
+  // floors: whole chunks, then the animated water and the glass on top
+  const ci0 = Math.floor((s0 + d0) / 2 / CH) - 2, ci1 = Math.ceil((s1 + d1) / 2 / CH) + 1, cj0 = Math.floor((s0 - d1) / 2 / CH) - 2, cj1 = Math.ceil((s1 - d0) / 2 / CH) + 1;
+  for (let cx = Math.max(0, ci0); cx <= Math.min(N / CH - 1, ci1); cx++) for (let cy = Math.max(0, cj0); cy <= Math.min(N / CH - 1, cj1); cy++) {
+    const ox = (cx - cy) * CH * TX - camX - CH * TX, oy = (cx + cy) * CH * TY - camY;
+    if (ox > VW || oy > VH || ox + CH * 2 * TX < 0 || oy + CH * 2 * TY < 0) continue;
+    ctx.drawImage(chunkImg(cx, cy), ox, oy);
+  }
   for (let s = s0; s <= s1; s++) for (let d = d0; d <= d1; d++) {
     if ((s + d) & 1) continue; const i = (s + d) >> 1, j = (s - d) >> 1; if (!inMap(i, j)) continue;
-    const k = idx(i, j), fl = world.floor[k];
-    const img = floorImg(fl, fl === 'agua' ? (world.fv[k] + wf) % 4 : world.fv[k]);
-    ctx.drawImage(img, d * TX - camX - TX, s * TY - camY);
-    if (world.glass.has(k)) { const [gx, gy] = isoS(i + 0.5, j + 0.5); for (let q = 0; q < 4; q++) { const h1 = hash2(i, j, q); prect(ctx, gx - 8 * AR + Math.floor(h1 * 16 * AR), gy - 4 * AR + Math.floor(hash2(j, i, q) * 8 * AR), AR, AR, (Math.floor(state.t * 3 + q) % 3) ? '#c8e0f0' : '#ffffff'); } }
+    const k = idx(i, j);
+    if (world.floor[k] === 'agua') ctx.drawImage(floorImg('agua', (world.fv[k] + wf) % 4), d * TX - camX - TX, s * TY - camY);
   }
+  for (const k of world.glass) { const i = Math.floor(k / N), j = k % N, [gx, gy] = isoS(i + 0.5, j + 0.5); if (gx < -40 || gy < -40 || gx > VW + 40 || gy > VH + 40) continue; for (let q = 0; q < 4; q++) { const h1 = hash2(i, j, q); prect(ctx, gx - 8 * AR + Math.floor(h1 * 16 * AR), gy - 4 * AR + Math.floor(hash2(j, i, q) * 8 * AR), AR, AR, (Math.floor(state.t * 3 + q) % 3) ? '#c8e0f0' : '#ffffff'); } }
   for (const dcl of state.decals) { const [x, y] = isoS(dcl.x, dcl.y); if (x < -20 || y < -20 || x > VW + 20 || y > VH + 20) continue; pdisc(ctx, x, y, dcl.r * AR, '#6e1418', 0.5); prect(ctx, x + (dcl.r + 1) * AR, y, AR, AR, '#5e1418'); }
   // entities by tile
   const buckets = new Map(); const put = (x, y, en) => { const k = idx(Math.floor(x), Math.floor(y)); if (!buckets.has(k)) buckets.set(k, []); en.o = x + y; buckets.get(k).push(en); };
@@ -199,14 +217,14 @@ function addLight(x, y, r, c, a) { r *= AR; const g = lightCx.createRadialGradie
 // night: a light map (the dark plus every lamp, fire and torch) multiplied over the frame, smooth and on the GPU
 function lighting() {
   const dl = daylight(); if (dl >= 0.999 && !state.lightTest) return;
-  const DW = W * AR, DH = H * AR;
+  const DW = W, DH = H; // the light map is soft, so it is made at half the screen's pixels and stretched
   if (!lightCv || lightCv.width !== DW || lightCv.height !== DH) { lightCv = document.createElement('canvas'); lightCv.width = DW; lightCv.height = DH; lightCx = lightCv.getContext('2d'); }
   const p = state.p, amb = tune.night_dark + (1 - tune.night_dark) * dl, h = hourOf(state.time);
   let ar, ag, ab;
   if (dl > 0.05 && h > 12) { ar = amb * 1.08; ag = amb * 0.86; ab = amb * 0.74; } else if (dl > 0.05) { ar = amb * 1.0; ag = amb * 0.86; ab = amb * 0.92; } else { ar = amb * 0.62; ag = amb * 0.76; ab = Math.min(1, amb * 1.1 + 0.03); }
   const c255 = v => Math.max(0, Math.min(255, Math.round(v * 255)));
   lightCx.setTransform(1, 0, 0, 1, 0, 0); lightCx.globalCompositeOperation = 'source-over'; lightCx.fillStyle = `rgb(${c255(ar)},${c255(ag)},${c255(ab)})`; lightCx.fillRect(0, 0, DW, DH);
-  lightCx.globalCompositeOperation = 'lighter'; lightCx.setTransform(ZOOM, 0, 0, ZOOM, 0, 0);
+  lightCx.globalCompositeOperation = 'lighter'; lightCx.setTransform(ZOOM / AR, 0, 0, ZOOM / AR, 0, 0);
   const [px, py] = isoS(p.x, p.y, 12);
   addLight(px, py, hasTrait('olhos') ? 60 : 38, '200,205,230', 0.5);
   if (p.light && hasTool(p, 'lanterna')) {
@@ -220,7 +238,7 @@ function lighting() {
   for (const g of state.gens) if (g.on) { const [x, y] = isoS(g.i + 0.5, g.j + 0.5, 8); addLight(x, y, 18, '160,255,160', 0.6); }
   for (const t of state.radios) if (t.t === 'tv' && t.on) { const [x, y] = isoS(t.i + 0.5, t.j + 0.5, 12); addLight(x, y, 34, '140,190,255', 0.7); }
   if (state.muzzle > 0) addLight(px, py, 110, '255,240,200', 1);
-  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(lightCv, 0, 0); ctx.restore();
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'multiply'; ctx.imageSmoothingEnabled = true; ctx.drawImage(lightCv, 0, 0, W * AR, H * AR); ctx.restore();
 }
 
 // ---- HUD -----------------------------------------------------------------------------------------

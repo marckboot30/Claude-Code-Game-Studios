@@ -270,7 +270,8 @@ let last, acc = 0, ALPHA = 1;
 function tick() {
   const now = clock.now();
   acc += Math.min(now - last, 0.25); last = now;
-  while (acc >= STEP) { step(); acc -= STEP; }
+  let n = 0; while (acc >= STEP && n < 4) { step(); acc -= STEP; n++; } // a slow phone never piles up steps
+  if (acc > STEP) acc = 0;
   ALPHA = acc / STEP;
   drawFrame();
 }
@@ -292,6 +293,7 @@ window.game = {
 };
 
 reset();
+prewarmSprites();
 scene = params.get('scene') || 'title';
 if (scene === 'play') beginPlay();
 last = clock.now();

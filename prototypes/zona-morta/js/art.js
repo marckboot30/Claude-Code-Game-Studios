@@ -90,6 +90,14 @@ function epx(src) {
   }
   oc.putImageData(od, 0, 0); return out;
 }
+// the figures the game shows most, made before play so walking never waits for them
+function prewarmSprites() {
+  for (let o = 0; o < ZOUTFITS.length; o++) for (const kind of ['comum', 'gordo', 'corredor']) for (const back of [false, true]) {
+    const base = Object.assign(zombieLook({ outfit: o, kind }), { back });
+    for (let f = 0; f < 4; f++) humanImg(Object.assign({}, base, { pose: 'walk', f }));
+    humanImg(Object.assign({}, base, { pose: 'attack', f: 0 })); humanImg(Object.assign({}, base, { pose: 'attack', f: 1 })); humanImg(Object.assign({}, base));
+  }
+}
 function finishSprite(c) { const big = AR === 2 ? epx(c) : c; outlineCanvas(big); return big; }
 
 // ---- bitmap font 3x5 (accents dropped) --------------------------------------------------------
@@ -98,9 +106,26 @@ const FONT3 = { A: '010101111101101', B: '110101110101110', C: '011100100100011'
   ':': '000010000010000', '.': '000000000000010', ',': '000000000010100', '-': '000000111000000', '/': '001001010100100', '[': '110100100100110', ']': '011001001001011', '%': '101001010100101', '+': '000010111010000', '!': '010010010000010', '?': '110001010000010', '(': '010100100100010', ')': '010001001001010', "'": '010010000000000', '"': '101101000000000', '=': '000111000111000', '<': '001010100010001', '>': '100010001010100', '_': '000000000000111', '*': '000101010101000', '#': '101111101111101', ' ': '000000000000000' };
 function normTxt(s) { return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase(); }
 function textW(s, sc = 1) { s = normTxt(s); return s.length ? (s.length * 4 - 1) * sc : 0; }
+// text on the main screen is drawn once into a small picture and reused: drawing every glyph
+// pixel each frame was the HUD's whole cost on a phone
+const textCache = new Map();
+const TEXT_CTX = (typeof ctx !== 'undefined') ? ctx : null;
 function ptext(c, s, x, y, col, sh = '#0b0d12', sc = 1, align = 'left') {
   s = normTxt(s); x = Math.round(x); y = Math.round(y);
   if (align === 'center') x -= Math.floor(textW(s, sc) / 2); else if (align === 'right') x -= textW(s, sc);
+  if (c === TEXT_CTX && s.length) {
+    const key = s + '|' + col + '|' + sh + '|' + sc;
+    let e = textCache.get(key);
+    if (!e) {
+      const w = textW(s, sc) + (sh ? sc : 0), h = 5 * sc + (sh ? sc : 0), cv = mkCanvas(Math.ceil(w * AR), Math.ceil(h * AR)), x2 = cv.getContext('2d');
+      x2.scale(AR, AR); rawText(x2, s, 0, 0, col, sh, sc); e = { cv, w: cv.width / AR, h: cv.height / AR };
+      if (textCache.size > 700) textCache.clear(); textCache.set(key, e);
+    }
+    c.drawImage(e.cv, x, y, e.w, e.h); return;
+  }
+  rawText(c, s, x, y, col, sh, sc);
+}
+function rawText(c, s, x, y, col, sh, sc) {
   for (const pass of sh ? [0, 1] : [1]) {
     c.fillStyle = pass === 0 ? sh : col;
     let cx = x;
@@ -247,7 +272,8 @@ function roofImg(b, i, j) {
     let k = 0; for (let t = 1; t < 4; t++) if (terms[t] < terms[k]) k = t;
     const ridgeFlat = Math.min(...terms) >= b.ridge;
     const base = ridgeFlat ? cols[1] : cols[k];
-    const pat = (k === 0 || k === 3) ? (px, py) => (((py - px * 0.5) % 4 + 4) % 4 < 1 ? shade(base, 0.85) : base) : (px, py) => (((py + px * 0.5) % 4 + 4) % 4 < 1 ? shade(base, 0.85) : base);
+    const dark = shade(base, 0.85); // worked out once, not per pixel
+    const pat = (k === 0 || k === 3) ? (px, py) => (((py - px * 0.5) % 4 + 4) % 4 < 1 ? dark : base) : (px, py) => (((py + px * 0.5) % 4 + 4) % 4 < 1 ? dark : base);
     pfill(x, [P(a[0], a[1], z(a[0], a[1])), P(bb[0], bb[1], z(bb[0], bb[1])), P(ctr[0], ctr[1], z(ctr[0], ctr[1]))], pat);
   }
   const ol = (a1, b1, a2, b2) => { const p = P(a1, b1, z(a1, b1)), q = P(a2, b2, z(a2, b2)); pline(x, p[0], p[1], q[0], q[1], OUTLINE); };

@@ -352,16 +352,20 @@ function updateZombies(dt) {
   for (const z of world.zombies) {
     if (z.dead) { z.deadT = (z.deadT || 0) + dt; continue; }
     const dx = p.x - z.x, dy = p.y - z.y;
-    if (Math.abs(dx) > 34 || Math.abs(dy) > 34) continue;
+    if (Math.abs(dx) > 28 || Math.abs(dy) > 28) continue;
     state.near.push(z);
+    // far ones think a third as often, with three times the step
+    const far = Math.abs(dx) > 14 || Math.abs(dy) > 14;
+    if (far) { z.skip = ((z.skip || 0) + 1) % 3; if (z.skip !== 0) continue; }
+    const zdt = far ? dt * 3 : dt;
     const d = Math.hypot(dx, dy), K = ZKINDS[z.kind];
-    z.flash = Math.max(0, (z.flash || 0) - dt); z.moving = false; z.attackPose = false;
-    if (z.down > 0) { z.down -= dt; continue; }
-    if (z.climb > 0) { z.climb -= dt; if (z.climb <= 0) { z.x = z.cx2; z.y = z.cy2; } continue; }
+    z.flash = Math.max(0, (z.flash || 0) - zdt); z.moving = false; z.attackPose = false;
+    if (z.down > 0) { z.down -= zdt; continue; }
+    if (z.climb > 0) { z.climb -= zdt; if (z.climb <= 0) { z.x = z.cx2; z.y = z.cy2; } continue; }
     // groans
-    z.groan -= dt; if (z.groan <= 0) { z.groan = 5 + rng() * 9; if (d < 12) sfx('groan', d); }
+    z.groan -= zdt; if (z.groan <= 0) { z.groan = 5 + rng() * 9; if (d < 12) sfx('groan', d); }
     // look
-    z.t -= dt;
+    z.t -= zdt;
     if (z.t <= 0) {
       z.t = 0.3 + rng() * 0.1;
       const sight = sightBase * K.sight;
@@ -373,11 +377,11 @@ function updateZombies(dt) {
       // attack when close and nothing between
       if (d < K.reach + 0.12 && los(z.x, z.y, p.x, p.y)) {
         z.dirx = dx / (d || 1); z.diry = dy / (d || 1); z.attackPose = true;
-        z.cd -= dt;
-        if (z.cd <= 0) { z.atk += dt; if (z.atk >= tune.zombie_windup) { z.atk = 0; z.cd = tune.zombie_attack_cd; if (!state.dead && d < K.reach + 0.3 && rng() < tune.zombie_hit_chance * K.hitRate) hurtPlayer(z); else sfx('miss'); } }
+        z.cd -= zdt;
+        if (z.cd <= 0) { z.atk += zdt; if (z.atk >= tune.zombie_windup) { z.atk = 0; z.cd = tune.zombie_attack_cd; if (!state.dead && d < K.reach + 0.3 && rng() < tune.zombie_hit_chance * K.hitRate) hurtPlayer(z); else sfx('miss'); } }
         continue;
       }
-      z.atk = 0; if (z.cd > 0) z.cd -= dt;
+      z.atk = 0; if (z.cd > 0) z.cd -= zdt;
       const ti = Math.floor(z.x), tj = Math.floor(z.y), here = fieldAt(ti, tj);
       if (here < Infinity && (ti !== Math.floor(p.x) || tj !== Math.floor(p.y))) {
         let bi = ti, bj = tj, bv = here;
@@ -387,31 +391,32 @@ function updateZombies(dt) {
           if (e && oc > 0) {
             // stand at the obstacle and break or climb it
             const sx = ti + 0.5 + (bi - ti) * 0.28, sy = tj + 0.5 + (bj - tj) * 0.28;
-            if (Math.hypot(sx - z.x, sy - z.y) > 0.12) steer(z, sx, sy, spd, dt);
+            if (Math.hypot(sx - z.x, sy - z.y) > 0.12) steer(z, sx, sy, spd, zdt);
             else if (e.win && e.glass !== 'ok' && !e.barr) { z.climb = 1.6; z.cx2 = bi + 0.5; z.cy2 = bj + 0.5; }
-            else bashEdge(z, e, dt);
-          } else steer(z, bi + 0.5, bj + 0.5, spd, dt);
-        } else steer(z, p.x, p.y, spd, dt);
-      } else steer(z, z.state === 'chase' ? p.x : z.tx, z.state === 'chase' ? p.y : z.ty, spd, dt);
+            else bashEdge(z, e, zdt);
+          } else steer(z, bi + 0.5, bj + 0.5, spd, zdt);
+        } else steer(z, p.x, p.y, spd, zdt);
+      } else steer(z, z.state === 'chase' ? p.x : z.tx, z.state === 'chase' ? p.y : z.ty, spd, zdt);
     } else if (z.state === 'invest') {
-      const moved = steer(z, z.tx, z.ty, spd, dt);
-      z.give -= dt; if (Math.hypot(z.tx - z.x, z.ty - z.y) < 0.4 || z.give <= 0 || moved < spd * dt * 0.2) { z.stuck = (z.stuck || 0) + dt; if (z.stuck > 1.5 || z.give <= 0) { z.state = 'idle'; z.stuck = 0; } }
+      const moved = steer(z, z.tx, z.ty, spd, zdt);
+      z.give -= zdt; if (Math.hypot(z.tx - z.x, z.ty - z.y) < 0.4 || z.give <= 0 || moved < spd * zdt * 0.2) { z.stuck = (z.stuck || 0) + zdt; if (z.stuck > 1.5 || z.give <= 0) { z.state = 'idle'; z.stuck = 0; } }
     } else {
-      z.wander -= dt;
+      z.wander -= zdt;
       if (z.wander <= 0) { z.wander = 3 + rng() * 6; if (rng() < 0.5) { z.tx = z.x + (rng() - 0.5) * 4; z.ty = z.y + (rng() - 0.5) * 4; z.walking = 2 + rng() * 2; } }
-      if (z.walking > 0) { z.walking -= dt; steer(z, z.tx, z.ty, spd * 0.5, dt); }
+      if (z.walking > 0) { z.walking -= zdt; steer(z, z.tx, z.ty, spd * 0.5, zdt); }
     }
   }
   // keep bodies apart
   const nz = state.near;
-  for (let a = 0; a < nz.length; a++) {
-    const A = nz[a]; if (A.dead) continue;
-    for (let b = a + 1; b < nz.length; b++) { const B = nz[b]; if (B.dead) continue; const dx = B.x - A.x, dy = B.y - A.y, d = Math.hypot(dx, dy); if (d < 0.42 && d > 0) { const k = (0.42 - d) / 2 / d; A.x -= dx * k; A.y -= dy * k; B.x += dx * k; B.y += dy * k; } }
+  const close = nz.filter(z => !z.dead && Math.abs(z.x - p.x) < 12 && Math.abs(z.y - p.y) < 12);
+  for (let a = 0; a < close.length; a++) {
+    const A = close[a]; if (A.dead) continue;
+    for (let b = a + 1; b < close.length; b++) { const B = close[b]; if (B.dead) continue; const dx = B.x - A.x, dy = B.y - A.y, d = Math.hypot(dx, dy); if (d < 0.42 && d > 0) { const k = (0.42 - d) / 2 / d; A.x -= dx * k; A.y -= dy * k; B.x += dx * k; B.y += dy * k; } }
     const dx = p.x - A.x, dy = p.y - A.y, d = Math.hypot(dx, dy); if (d < 0.45 && d > 0 && A.down <= 0) { const k = (0.45 - d) / d; moveBody(p, dx * k * 0.5, dy * k * 0.5, 0.24); A.x -= dx * k * 0.5; A.y -= dy * k * 0.5; }
   }
   for (const z of nz) { if (z.moving) { z.ft = (z.ft || 0) + dt * (ZKINDS[z.kind].runner ? 9 : 3.5); z.f = Math.floor(z.ft) % 4; } else z.f = 0; }
   // visible to the survivor?
-  for (const z of nz) z.visible = Math.hypot(z.x - p.x, z.y - p.y) < 1.5 || los(p.x, p.y, z.x, z.y);
+  for (const z of nz) { z.visT = (z.visT || 0) - dt; if (z.visT <= 0 || z.visible === undefined) { z.visT = 0.15 + (z.id % 5) * 0.02; z.visible = Math.hypot(z.x - p.x, z.y - p.y) < 1.5 || los(p.x, p.y, z.x, z.y); } }
   // the long dead are cleared away
   if (world.zombies.length > 900) world.zombies = world.zombies.filter(z => !z.dead || z.deadT < 200);
 }
