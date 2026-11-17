@@ -452,22 +452,41 @@ function drawTitle() {
   ptext(ctx, 'PIXEL ART ISOMETRICA - PROTOTIPO', W / 2, H - 10, '#4a4f5c', null, 1, 'center');
 }
 function drawCreate() {
-  drawWorld(); ctx.fillStyle = 'rgba(8,10,16,0.85)'; ctx.fillRect(0, 0, W, H);
-  bigText('SEU SOBREVIVENTE', W / 2, 10, 2, '#d8d0a0');
-  const c = state.create;
-  ptext(ctx, 'PROFISSAO  (SETAS)', 20, 34, '#f0d040');
-  PROFS.forEach((pr, k) => { const y = 46 + k * 18; if (k === c.prof) prect(ctx, 16, y - 3, 190, 16, '#3a3420'); ptext(ctx, `${pr.n} (${pr.pts} PONTOS)`, 22, y, k === c.prof ? '#f0d040' : '#f0ead8'); ptext(ctx, pr.d, 22, y + 7, '#9aa2b0'); hitRect(16, y - 3, 190, 16, () => { c.prof = k; }); });
-  ptext(ctx, `VANTAGENS ${traitCount(true)}/${MAX_GOOD}  DESVANTAGENS ${traitCount(false)}/${MAX_BAD}  (TECLAS 1-0)`, 230, 34, '#f0d040');
-  TRAITS.forEach((t, k) => { const y = 46 + k * 14, on = c.traits.has(t.id); if (on) prect(ctx, 226, y - 3, 240, 13, '#2a3a2a'); ptext(ctx, `${(k + 1) % 10} ${on ? '[X]' : '[ ]'} ${t.n} (${t.c > 0 ? '+' : ''}${t.c})`, 230, y, t.c < 0 ? '#9ad08a' : '#ff9080'); ptext(ctx, t.d, 230, y + 6, '#7a808c'); hitRect(226, y - 3, 240, 13, () => toggleTrait(t.id)); });
-  const pts = createPoints();
-  ptext(ctx, `PONTOS SOBRANDO: ${pts}`, 22, 150, pts >= 0 ? '#9ad08a' : '#ff6060');
-  ptext(ctx, 'VANTAGENS GASTAM PONTOS, DESVANTAGENS DAO PONTOS.', 22, 160, '#9aa2b0'); if (state.createMsg) ptext(ctx, state.createMsg, 22, 140, '#ff9080');
-  ptext(ctx, 'VOCE COMECA SO DE CUECA, SEM NADA.', 22, 170, '#9aa2b0');
-  ptext(ctx, 'HABILIDADES COMECAM NO NIVEL 1: SO LIVROS E TV ENSINAM.', 22, 180, '#9aa2b0');
-  const im = humanImg({ skin: '#e2a57c', hair: '#4a3020', under: '#eef0f2', pose: 'idle' }); ctx.drawImage(im.c, 70, 196, 40, 56);
-  const bx = W / 2 + 10, by = H - 26; prect(ctx, bx, by, 150, 18, pts >= 0 ? '#5a4a18' : '#4a1818'); prect(ctx, bx, by, 150, 1, '#f0d040'); prect(ctx, bx, by + 17, 150, 1, '#0b0d12');
-  ptext(ctx, pts >= 0 ? 'COMECAR (ENTER OU TOQUE)' : 'TIRE UMA VANTAGEM', bx + 75, by + 7, pts >= 0 ? '#f0d040' : '#ff6060', '#0b0d12', 1, 'center');
-  hitRect(bx, by, 150, 18, () => { state.startTap = true; });
+  // big type and big buttons, so a phone can read and tap everything
+  drawWorld(); ctx.fillStyle = 'rgba(8,10,16,0.9)'; ctx.fillRect(0, 0, W, H);
+  const c = state.create, pts = createPoints(), m = 10, gap = 8, charW = 110;
+  const colW = Math.floor((W - 2 * m - charW - 2 * gap) / 3), x1 = m, x2 = x1 + colW + gap, x3 = x2 + colW + gap, rowH = 34, y0 = 52;
+  bigText('SEU SOBREVIVENTE', W / 2, 6, 3, '#d8d0a0');
+  const head = (t, x, col) => ptext(ctx, t, x + 2, y0 - 14, col, '#0b0d12', 2);
+  head('PROFISSAO', x1, '#f0d040'); head(`VANTAGENS ${traitCount(true)}/${MAX_GOOD}`, x2, '#9ad08a'); head(`DEFEITOS ${traitCount(false)}/${MAX_BAD}`, x3, '#ff9080');
+  const box = (x, y, on, accent) => { prect(ctx, x, y, colW, rowH - 4, on ? accent : '#1a1d26'); prect(ctx, x, y, colW, 1, on ? '#f0d040' : '#3a3f4c'); prect(ctx, x, y + rowH - 5, colW, 1, '#060709'); };
+  PROFS.forEach((pr, k) => {
+    const y = y0 + k * rowH, on = k === c.prof; box(x1, y, on, '#4a3e14');
+    ptext(ctx, pr.n, x1 + 6, y + 4, on ? '#f0d040' : '#f0ead8', '#0b0d12', 2); ptext(ctx, `${pr.pts} PONTOS`, x1 + 6, y + 17, '#c8a070', '#0b0d12', 1.5);
+    hitRect(x1, y, colW, rowH - 4, () => { c.prof = k; c.info = pr.d; while (createPoints() < 0) { const g = TRAITS.find(t => c.traits.has(t.id) && t.c < 0); if (!g) break; c.traits.delete(g.id); } });
+  });
+  const col = (list, x, accent, costCol) => list.forEach((t, k) => {
+    const y = y0 + k * rowH, on = c.traits.has(t.id), key = (TRAITS.indexOf(t) + 1) % 10; box(x, y, on, accent);
+    ptext(ctx, (on ? '+ ' : '') + t.n, x + 6, y + 4, on ? '#ffffff' : '#f0ead8', '#0b0d12', 2);
+    ptext(ctx, `${t.c > 0 ? '+' : ''}${t.c} PONTOS   [${key}]`, x + 6, y + 17, costCol, '#0b0d12', 1.5);
+    hitRect(x, y, colW, rowH - 4, () => { toggleTrait(t.id); c.info = t.n + ': ' + t.d; });
+  });
+  col(TRAITS.filter(t => t.c < 0), x2, '#24502a', '#9ad08a'); col(TRAITS.filter(t => t.c > 0), x3, '#5a2420', '#ff9080');
+  // what the last thing tapped does
+  const iy = y0 + 5 * rowH + 2, iw = x3 + colW - x1, ih = H - iy - 44;
+  panel(x1, iy, iw, ih, 0.9);
+  const info = state.createMsg ? state.createMsg : (c.info || PROFS[c.prof].d);
+  wrapTxt(info, (iw - 12) / 2).slice(0, 3).forEach((ln, k) => ptext(ctx, ln, x1 + 6, iy + 6 + k * 14, state.createMsg ? '#ff9080' : '#c8ccd6', '#0b0d12', 2));
+  ptext(ctx, `PONTOS SOBRANDO: ${pts}`, x1 + 2, H - 34, pts >= 0 ? '#9ad08a' : '#ff6060', '#0b0d12', 2);
+  ptext(ctx, 'VANTAGEM GASTA PONTOS, DEFEITO DA PONTOS.', x1 + 2, H - 14, '#8a8f9c', '#0b0d12', 1.5);
+  // the survivor, standing on the right, above the start button
+  const im = humanImg({ skin: '#e2a57c', hair: '#4a3020', under: '#eef0f2', pose: 'idle' }), sw = 72, sh = 100, sx = W - m - charW / 2 - sw / 2;
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(W - m - charW / 2, y0 + 150, 26, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.drawImage(im.c, Math.round(sx), y0 + 150 - sh + 6, sw, sh);
+  const bw = Math.max(charW + 40, 170), bx = W - m - bw, by = H - 42, bh = 34;
+  prect(ctx, bx, by, bw, bh, pts >= 0 ? '#6a5618' : '#4a1818'); prect(ctx, bx, by, bw, 2, '#f0d040'); prect(ctx, bx, by + bh - 2, bw, 2, '#0b0d12');
+  ptext(ctx, pts >= 0 ? 'COMECAR' : 'TIRE UMA VANTAGEM', bx + bw / 2, by + 8, pts >= 0 ? '#f0d040' : '#ff6060', '#0b0d12', pts >= 0 ? 3 : 2, 'center');
+  hitRect(bx, by, bw, bh, () => { state.startTap = true; });
 }
 function traitCount(good) { const c = state.create; return TRAITS.filter(t => c.traits.has(t.id) && (t.c < 0) === good).length; }
 function toggleTrait(id) {
