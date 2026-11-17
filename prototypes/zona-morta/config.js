@@ -4,7 +4,7 @@
 // Every tuning value lives here, each with value, min, max and step. The game reads them live
 // through tune.<name> (index.html); the tweak panel, an add-on, writes them back here.
 window.CONFIG = {
-  seed: 1, // every gameplay random call reads rng(), seeded from this (or ?seed= in the address)
+  seed: 0, // every gameplay random call reads rng(), seeded from this; 0 means a new town each game (or ?seed= in the address)
   volume: { value: 0.5, min: 0, max: 1, step: 0.05 },
 
   // time and the world's clock

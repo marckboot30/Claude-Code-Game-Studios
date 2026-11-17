@@ -156,7 +156,8 @@ function tone(freq, dur, type = 'square', vol = 0.3, delay = 0) {
 // figures: every zombie kind, the survivor and the animals side by side (?scene=figures).
 let scene, state;
 function reset() {
-  seed = Number(params.get('seed')) || CONFIG.seed;
+  // seed 0 in config.js: a new town and a new place to wake every game; ?seed= or a number there repeats one
+  seed = Number(params.get('seed')) || CONFIG.seed || ((Date.now() % 2147483647) | 0);
   generateWorld();
   state = {
     t: 0, time: 0, killed: 0, dead: false, cause: '', gained: '', record: 0, deathT: 0,
@@ -171,7 +172,7 @@ function reset() {
   for (const f of world.furn) if (f && (f.t === 'radio' || f.t === 'tv') && !state.radios.includes(f)) state.radios.push(f);
   explore(state.p.x, state.p.y, 13);
   updateZombies(0); state.targets = targetsNear();
-  msg('Você acordou só de cueca. Está frio.', '#9fd3f0');
+  msg(`Você acordou só de cueca: ${world.start.name || 'um lugar estranho'}. Está frio.`, '#9fd3f0');
 }
 function beginPlay() {
   const c = state.create; state.prof = PROFS[c.prof]; state.traits = new Set(c.traits);

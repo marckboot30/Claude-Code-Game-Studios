@@ -36,6 +36,7 @@ Qualquer coisa, dá uma olhada também na abertura do jogo, né? Porque o nosso 
 Nosso jogo está travando muito tenta dá uma arrumada nisso
 Ô Claude, o nosso jogo no servidor ainda está travando, tá? Não foi corrigido nada. Dá uma verificada no nosso servidor ali, verifica se tem algum problema lá e tenta corrigir, por favor. Porque eu fiz um teste por dentro do Claude normal aqui e tá funcionando de boa, mas lá no servidor tá travando.
 Nosso jogo está travando
+Temos que fazer com que o jogado nascer em lugares aleatórios
 
 **Pitch:** Você acorda só de cueca, sem nada, numa cidade grande infestada, e vai de casa em casa — condomínios, galpões, fazendas, posto, hospital, biblioteca, corpo de bombeiros — juntando roupa, comida, livros e um machado, barricando a base antes que a horda quebre as janelas; no fim só conta quantos dias você aguentou.
 
@@ -55,7 +56,7 @@ Nosso jogo está travando
 - View: 2D isométrico · Camera: segue o jogador de cima em diagonal, zoom em passos inteiros
 
 ## First minute
-Você acorda só de cueca no dormitório do corpo de bombeiros, tremendo, com o moodle de frio aceso. Um brilho no armário ensina o E: a barrinha sobe em cima da cabeça e sai uma camiseta e calça; vestir baixa o frio e sobe a proteção. Outro armário tem o machado. Lá fora, você corre, um anel de barulho se espalha e dois zumbis lentos viram na sua direção; você mata um com o machado. Corta uma árvore, as toras viram tábuas, e quando o céu alaranja você prega a primeira tábua na janela — à noite os zumbis batem nela e ela aguenta.
+Você acorda só de cueca num lugar sorteado a cada partida (uma casa, um condomínio, uma fazenda ou o corpo de bombeiros), tremendo, com o moodle de frio aceso. Um brilho no armário ensina o E: a barrinha sobe em cima da cabeça e sai uma camiseta e calça; vestir baixa o frio e sobe a proteção. Outro armário tem o machado. Lá fora, você corre, um anel de barulho se espalha e dois zumbis lentos viram na sua direção; você mata um com o machado. Corta uma árvore, as toras viram tábuas, e quando o céu alaranja você prega a primeira tábua na janela — à noite os zumbis batem nela e ela aguenta.
 
 ## Challenge
 O dia 1 (cerca de 6 minutos reais) tem poucos zumbis lentos perto de você; a primeira noite traz grupos atraídos pelo barulho que atacam portas e janelas. A cada dia a população perto de você cresce, corredores aparecem do dia 3, a luz cai no dia 4 e as casas próximas se esvaziam. Fome, sede e frio apertam se você não sair. Morreu (mordida, fome, sede, frio), acabou: resumo com dias sobrevividos e zumbis mortos, recomeça do zero. *(provisional)*

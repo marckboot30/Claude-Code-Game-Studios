@@ -377,7 +377,7 @@ const TUT = [
   { s: 'Você acordou só de cueca e com frio. Chegue perto de um armário e aperte [E] para vasculhar.', done: () => state.tutSearch },
   { s: 'Pegue o que achou: [SETAS] e [ENTER], ou [T] para pegar tudo.', done: () => state.p.inv.length > 0 },
   { s: 'Abra o inventário com [TAB] e vista as roupas com [ENTER]. Roupa esquenta e protege.', done: () => ['tronco', 'casaco', 'pes'].some(s => state.p.wear[s]) || (state.p.wear.pernas && state.p.wear.pernas.id !== 'cueca') },
-  { s: 'Os armários do bombeiro guardam um machado. Equipe uma arma no inventário com [ENTER].', done: () => !!state.p.hand },
+  { s: 'Ache uma arma (cano, taco, faca) e equipe no inventário com [ENTER]. O corpo de bombeiros tem machados nos armários.', done: () => !!state.p.hand },
   { s: 'Lá fora, correr [SHIFT] faz barulho e atrai zumbis. Ataque: clique ou [ESPAÇO]. Empurrar: [Q].', done: () => state.killed > 0 },
   { s: 'Com o machado, corte uma árvore com [E]. Toras viram tábuas em [TAB] > CRIAR (com serrote).', done: () => hasTool(state.p, 'tabua') || hasTool(state.p, 'tora') || state.tutBarr },
   { s: 'Barricar: [B], tecla 1, clique na janela. Precisa de martelo, tábua e pregos (prateleira da garagem).', done: () => state.tutBarr },

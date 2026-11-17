@@ -356,8 +356,15 @@ function generateWorld() {
     if (f) cars++;
   }
   // zombies: two in the street outside the fire station for the first minute, the rest spread
+  // where you wake: a home picked at random each game (a house, a condominium, a farm or the fire station)
+  chooseStart();
   const s = world.start;
-  spawnZombie(s.i + 5.5, s.j + 6.5, 'comum'); spawnZombie(s.i + 9, s.j + 5.2, 'comum');
+  // two slow ones outside, a few houses away, for the first minute
+  for (let n = 0, tries2 = 0; n < 2 && tries2 < 400; tries2++) {
+    const a = rng() * Math.PI * 2, r = 6 + rng() * 3, x = s.i + Math.cos(a) * r, y = s.j + Math.sin(a) * r, i = Math.floor(x), j = Math.floor(y);
+    if (!inMap(i, j) || world.bld[idx(i, j)] >= 0 || (world.furn[idx(i, j)] && world.furn[idx(i, j)].solid) || world.floor[idx(i, j)] === 'agua') continue;
+    spawnZombie(x, y, 'comum'); n++;
+  }
   let placed = 0; tries = 0;
   while (placed < tune.zombies_start && tries++ < 20000) {
     const town = rng() < 0.72;
@@ -365,10 +372,25 @@ function generateWorld() {
     const k = idx(Math.floor(i), Math.floor(j));
     if (world.furn[k] && world.furn[k].solid) continue; if (world.floor[k] === 'agua') continue;
     if (Math.hypot(i - s.i, j - s.j) < tune.start_safe_radius) continue;
-    if (world.bld[k] >= 0 && world.buildings[world.bld[k]].type === 'bombeiros') continue;
+    if (world.bld[k] >= 0 && world.bld[k] === s.b) continue; // nobody inside the place you wake
     spawnZombie(i, j, rng() < 0.1 ? 'gordo' : rng() < 0.06 ? 'rastejante' : 'comum'); placed++;
   }
   buildMapImage();
+}
+function chooseStart() {
+  const homes = world.buildings.filter(b => ['casa', 'condominio', 'fazenda', 'bombeiros'].includes(b.type));
+  const b = homes[Math.floor(rng() * homes.length)];
+  const free = [];
+  for (let i = b.x0; i < b.x1; i++) for (let j = b.y0; j < b.y1; j++) { const k = idx(i, j); if (world.bld[k] === b.id && !world.furn[k] && world.floor[k] !== 'agua') free.push([i, j]); }
+  // wake next to a bed when the place has one
+  const nearBed = free.filter(([i, j]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => { const f = inMap(i + a, j + c) && world.furn[idx(i + a, j + c)]; return f && (f.t === 'cama' || f.t === 'camaHosp'); }));
+  const pickFrom = nearBed.length ? nearBed : free, t = pickFrom[Math.floor(rng() * pickFrom.length)];
+  world.start = { i: t[0] + 0.5, j: t[1] + 0.5, b: b.id, name: b.name };
+  // the first search always finds something to wear
+  let box = null;
+  for (let i = b.x0; i < b.x1 && !box; i++) for (let j = b.y0; j < b.y1; j++) { const f = world.furn[idx(i, j)]; if (f && ['guarda', 'comoda', 'armario'].includes(f.t)) { box = f; break; } }
+  if (!box) for (let i = b.x0; i < b.x1 && !box; i++) for (let j = b.y0; j < b.y1; j++) { const f = world.furn[idx(i, j)]; if (f && f.cont) { box = f; break; } }
+  if (box) box.preset = (box.preset || []).concat(['camiseta', 'jeans']); else { addGround(t[0], t[1], newItem('camiseta')); addGround(t[0], t[1], newItem('jeans')); }
 }
 function spawnZombie(x, y, kind) {
   const d = ZKINDS[kind];
