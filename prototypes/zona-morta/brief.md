@@ -35,6 +35,7 @@ Porque daí ele vai deixar o nosso jogo com um toque de realista, né?
 Qualquer coisa, dá uma olhada também na abertura do jogo, né? Porque o nosso maior pontual que a gente quer, o público que a gente quer atrair é jogadores de celular, né? Então precisa ficar aparecendo bem nítido para os jogadores que vai jogar no celular, para que ele consiga entender e ver o que ele está escolhendo ou lendo na abertura do nosso jogo, né? Então as fontes estão muito pequenas, não dá quase para ver, né?
 Nosso jogo está travando muito tenta dá uma arrumada nisso
 Ô Claude, o nosso jogo no servidor ainda está travando, tá? Não foi corrigido nada. Dá uma verificada no nosso servidor ali, verifica se tem algum problema lá e tenta corrigir, por favor. Porque eu fiz um teste por dentro do Claude normal aqui e tá funcionando de boa, mas lá no servidor tá travando.
+Nosso jogo está travando
 
 **Pitch:** Você acorda só de cueca, sem nada, numa cidade grande infestada, e vai de casa em casa — condomínios, galpões, fazendas, posto, hospital, biblioteca, corpo de bombeiros — juntando roupa, comida, livros e um machado, barricando a base antes que a horda quebre as janelas; no fim só conta quantos dias você aguentou.
 

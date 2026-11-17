@@ -43,7 +43,7 @@ const ctx = canvas.getContext('2d');
 let viewScale = 1;
 const AR_SCREEN = 2; // the art's resolution, must match AR in js/art.js
 // RS: the screen's pixels per logical pixel. 2 shows every art pixel; a device that cannot keep up drops it to 1.5 or 1
-let RS = 2, perfEma = 16, perfSlow = 0;
+let RS = 2, perfEma = 16, perfSlow = 0, fpsShow = 60, fpsN = 0, fpsT = 0;
 function fit() { // the canvas takes the screen's shape, so a phone is filled edge to edge
   const coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
   W = Math.max(480, Math.min(900, Math.round(H * innerWidth / Math.max(1, innerHeight) / 2) * 2));
@@ -98,7 +98,7 @@ canvas.addEventListener('pointermove', e => {
   if (e.pointerId === stick.id) { stick.dx = Math.max(-28, Math.min(28, x - stick.cx)); stick.dy = Math.max(-28, Math.min(28, y - stick.cy)); applyStick(); return; }
   if (pinch.has(e.pointerId)) {
     pinch.set(e.pointerId, [x, y]);
-    if (pinch.size === 2 && pinchD) { const [a, b] = [...pinch.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); ZOOM = Math.max(0.6, Math.min(3, pinchZ * d / pinchD)); if (state) state.zoomShow = 0.8; } // fingers apart: closer, together: farther
+    if (pinch.size === 2 && pinchD) { const [a, b] = [...pinch.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); ZOOM = Math.max(0.75, Math.min(3, pinchZ * d / pinchD)); if (state) state.zoomShow = 0.8; } // fingers apart: closer, together: farther
     return;
   }
   if (e.pointerType === 'touch') return;
@@ -190,7 +190,7 @@ function playUpdate(dt) {
   if (pressed('Equal') || pressed('NumpadAdd')) zoomMul *= 1.25;
   if (pressed('Minus') || pressed('NumpadSubtract')) zoomMul /= 1.25;
   if (pressed('KeyZ')) { ZOOM = ZOOM < 1.5 ? 2 : 1; state.zoomShow = 0.8; }
-  if (zoomMul !== 1) { ZOOM = Math.max(0.6, Math.min(3, ZOOM * zoomMul)); zoomMul = 1; state.zoomShow = 0.8; }
+  if (zoomMul !== 1) { ZOOM = Math.max(0.75, Math.min(3, ZOOM * zoomMul)); zoomMul = 1; state.zoomShow = 0.8; }
   zoomReq = 0; if (state.zoomShow > 0) state.zoomShow -= dt;
   // the map
   if (ui.map) {
@@ -277,6 +277,7 @@ function tick() {
   if (acc > STEP) acc = 0;
   ALPHA = acc / STEP;
   const t0 = performance.now(); drawFrame(); const ft = performance.now() - t0;
+  fpsN++; fpsT += 1; if (now - (tick.t0 || 0) >= 1) { fpsShow = fpsN / Math.max(0.001, now - (tick.t0 || now - 1)); fpsN = 0; tick.t0 = now; } // frames per second, shown on screen
   // automatic quality: a device that keeps missing frames draws with fewer pixels
   perfEma = perfEma * 0.85 + ft * 0.15;
   if (scene === 'play' && perfEma > 22 && RS > 1) { if (++perfSlow > 30) { RS = RS > 1.6 ? 1.5 : 1; perfSlow = 0; perfEma = 14; fit(); } } else perfSlow = Math.max(0, perfSlow - 1);

@@ -143,7 +143,7 @@ function chunkImg(cx, cy) {
     const i = cx * CH + li, j = cy * CH + lj; if (!inMap(i, j)) continue;
     const k = idx(i, j); x.drawImage(floorImg(world.floor[k], world.fv[k]), (li - lj) * TX + CH * TX - TX, (li + lj) * TY);
   }
-  chunkCache.set(key, c); if (chunkCache.size > 36) chunkCache.delete(chunkCache.keys().next().value);
+  chunkCache.set(key, c); if (chunkCache.size > 72) chunkCache.delete(chunkCache.keys().next().value); // more than the farthest zoom shows, so it never redraws every frame
   return c;
 }
 function drawWorld() {
@@ -213,7 +213,8 @@ function drawBuildGhost() {
 // ---- night light ----------------------------------------------------------------------------------
 let lightCv = null, lightCx = null;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-function addLight(x, y, r, c, a) { r *= AR; const g = lightCx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${c},${a})`); g.addColorStop(1, `rgba(${c},0)`); lightCx.fillStyle = g; lightCx.fillRect(x - r, y - r, r * 2, r * 2); }
+// a light off screen is skipped
+function addLight(x, y, r, c, a) { r *= AR; if (x < -r || y < -r || x > W * AR / ZOOM + r || y > H * AR / ZOOM + r) return; const g = lightCx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${c},${a})`); g.addColorStop(1, `rgba(${c},0)`); lightCx.fillStyle = g; lightCx.fillRect(x - r, y - r, r * 2, r * 2); }
 // night: a light map (the dark plus every lamp, fire and torch) multiplied over the frame, smooth and on the GPU
 function lighting() {
   const dl = daylight(); if (dl >= 0.999 && !state.lightTest) return;
@@ -234,7 +235,7 @@ function lighting() {
   }
   for (const f of state.fires) if (f.fuel > 0) { const [x, y] = isoS(f.i + 0.5, f.j + 0.5, 4); addLight(x, y, 78 + Math.sin(state.t * 9) * 3, '255,160,80', 0.9); }
   if (powerOn()) for (const [i, j] of world.lamps) { if (Math.abs(i - p.x) > 26 || Math.abs(j - p.y) > 26) continue; const [x, y] = isoS(i, j, 0); addLight(x, y, 58, '255,225,160', 0.7); }
-  for (const B of world.buildings) { if (!B.powered || Math.abs(B.x0 - p.x) > 26 || Math.abs(B.y0 - p.y) > 26) continue; for (const [i, j] of B.lights) { const [x, y] = isoS(i, j, B.id === curB ? 4 : 26); addLight(x, y, 46, '255,220,150', 0.75); } }
+  for (const B of world.buildings) { if (!B.powered || Math.abs(B.x0 - p.x) > 16 || Math.abs(B.y0 - p.y) > 16) continue; for (const [i, j] of B.lights) { const [x, y] = isoS(i, j, B.id === curB ? 4 : 26); addLight(x, y, 46, '255,220,150', 0.75); } }
   for (const g of state.gens) if (g.on) { const [x, y] = isoS(g.i + 0.5, g.j + 0.5, 8); addLight(x, y, 18, '160,255,160', 0.6); }
   for (const t of state.radios) if (t.t === 'tv' && t.on) { const [x, y] = isoS(t.i + 0.5, t.j + 0.5, 12); addLight(x, y, 34, '140,190,255', 0.7); }
   if (state.muzzle > 0) addLight(px, py, 110, '255,240,200', 1);
@@ -314,6 +315,8 @@ function drawHUD() {
   if (state.ui.panel === 'inv') drawInv(); else if (state.ui.panel === 'saude') drawHealth();
   if (state.ui.map) drawMap();
   if (TOUCH && !state.ui.map) drawTouch();
+  // frames per second and the drawing quality, small at the top: what a player reports when it stutters
+  { const fps = Math.round(fpsShow); ptext(ctx, `${fps} FPS  QUALIDADE ${RS === 2 ? 'ALTA' : RS > 1 ? 'MEDIA' : 'BAIXA'}`, W / 2, 3, fps >= 45 ? '#7ac050' : fps >= 25 ? '#e8c040' : '#ff6060', '#0b0d12', 1, 'center'); }
   if (state.zoomShow > 0) ptext(ctx, `ZOOM ${ZOOM.toFixed(1)}X`, W / 2, 30, '#f0d040', '#0b0d12', 2, 'center');
   if (p.hurt > 0) { ctx.fillStyle = `rgba(200,20,20,${p.hurt * 0.5})`; ctx.fillRect(0, 0, W, H); }
   if (p.sleeping) { ctx.fillStyle = 'rgba(0,0,10,0.45)'; ctx.fillRect(0, 0, W, H); ptext(ctx, 'DORMINDO...  (MEXA-SE PARA ACORDAR)', W / 2, H / 2 - 30, '#b8a0e0', '#0b0d12', 1, 'center'); }
