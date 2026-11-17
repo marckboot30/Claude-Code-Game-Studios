@@ -350,7 +350,8 @@ function updateZombies(dt) {
   state.near = [];
   const sightBase = (night ? tune.sight_night : tune.sight_day) * (p.crouch ? tune.sight_crouch : 1) * ((night && p.light) ? 1.8 : 1);
   for (const z of world.zombies) {
-    if (z.dead) { z.deadT = (z.deadT || 0) + dt; continue; }
+    // the dead stay on the ground: listed so they are drawn, but they think no more
+    if (z.dead) { z.deadT = (z.deadT || 0) + dt; if (Math.abs(p.x - z.x) < 28 && Math.abs(p.y - z.y) < 28) state.near.push(z); continue; }
     const dx = p.x - z.x, dy = p.y - z.y;
     if (Math.abs(dx) > 28 || Math.abs(dy) > 28) continue;
     state.near.push(z);

@@ -5,6 +5,9 @@
 // code, in clean isometric pixel art (2:1 tiles of 32x16, 1px dark outline, no smoothing).
 'use strict';
 
+// a test look, only with ?look=mini in the address: a tilt-shift miniature over the same world
+const LOOK = new URLSearchParams(location.search).get('look') || '';
+const LANE = LOOK === 'mini' ? '#d8a828' : '#d8d0a0';
 const AR = 2; // art resolution: every world picture is drawn with 2x2 the pixels of the 1x design, so the squares are small
 const TW = 32, TH = 16, WALL_H = 30, CUT_H = 5, WT = 0.16;
 const OUTLINE = '#14161c';
@@ -157,8 +160,8 @@ function floorImg(type, v) {
       case 'terra': case 'terraRua': return n < 0.03 ? '#705a3e' : n < 0.05 ? '#867050' : base;
       case 'campo': return ((py - px * 0.5 + 64) % 4 < 1.5) ? '#5a4428' : (n < 0.05 ? '#7d6a40' : base);
       case 'asfalto': return n < 0.03 ? '#484b52' : n < 0.05 ? '#53565e' : base;
-      case 'faixaV': { const on = Math.abs((px - 16 * AR) - (py - 8 * AR) * -2) < 1.6 * AR && (py < 6 * AR || py > 10 * AR); return on ? '#d8d0a0' : base; }
-      case 'faixaH': { const on = Math.abs((px - 16 * AR) - (py - 8 * AR) * 2) < 1.6 * AR && (py < 6 * AR || py > 10 * AR); return on ? '#d8d0a0' : base; }
+      case 'faixaV': { const on = Math.abs((px - 16 * AR) - (py - 8 * AR) * -2) < 1.6 * AR && (py < 6 * AR || py > 10 * AR); return on ? LANE : base; }
+      case 'faixaH': { const on = Math.abs((px - 16 * AR) - (py - 8 * AR) * 2) < 1.6 * AR && (py < 6 * AR || py > 10 * AR); return on ? LANE : base; }
       case 'calcada': return (px === 16 * AR || (py === 8 * AR)) ? '#8c8c86' : base;
       case 'madeira': { const r = ((py - px * 0.5) % 4 + 4) % 4; return r < 1 ? '#6e4626' : (n < 0.04 ? '#8c6038' : base); }
       case 'azulejo': { const a = ((py - px * 0.5) % 8 + 8) % 8, b = ((py + px * 0.5) % 8 + 8) % 8; return (a < 1 || b < 1) ? '#b8b4a8' : base; }

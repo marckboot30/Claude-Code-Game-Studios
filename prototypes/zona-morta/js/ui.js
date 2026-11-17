@@ -216,6 +216,28 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 // a light off screen is skipped
 function addLight(x, y, r, c, a) { r *= AR; if (x < -r || y < -r || x > W * AR / ZOOM + r || y > H * AR / ZOOM + r) return; const g = lightCx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${c},${a})`); g.addColorStop(1, `rgba(${c},0)`); lightCx.fillStyle = g; lightCx.fillRect(x - r, y - r, r * 2, r * 2); }
 // night: a light map (the dark plus every lamp, fire and torch) multiplied over the frame, smooth and on the GPU
+// ---- test look: tilt-shift miniature (only with ?look=mini) -------------------------------------
+let miniA = null, miniB = null, miniC = null;
+function miniLook() {
+  const cw = canvas.width, ch = canvas.height;
+  if (!miniA || miniA.width !== cw || miniA.height !== ch) { miniA = mkCanvas(cw, ch); miniB = mkCanvas(Math.ceil(cw / 4), Math.ceil(ch / 4)); miniC = mkCanvas(cw, ch); }
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // grade: a little less colour, more contrast, warmer light, like a photo
+  const a = miniA.getContext('2d'); a.clearRect(0, 0, cw, ch); a.filter = 'saturate(0.82) contrast(1.14) brightness(1.04) sepia(0.08)'; a.drawImage(canvas, 0, 0); a.filter = 'none';
+  ctx.drawImage(miniA, 0, 0);
+  // blur: shrink, blur small, grow back smooth
+  const b = miniB.getContext('2d'); b.clearRect(0, 0, miniB.width, miniB.height); b.imageSmoothingEnabled = true; b.filter = 'blur(2.5px)'; b.drawImage(canvas, 0, 0, miniB.width, miniB.height); b.filter = 'none';
+  const c = miniC.getContext('2d'); c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, cw, ch); c.imageSmoothingEnabled = true; c.drawImage(miniB, 0, 0, cw, ch);
+  // keep the blur only at the top and the bottom: the sharp band follows the player
+  const g = c.createLinearGradient(0, 0, 0, ch);
+  g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.18, 'rgba(0,0,0,0.9)'); g.addColorStop(0.38, 'rgba(0,0,0,0)'); g.addColorStop(0.66, 'rgba(0,0,0,0)'); g.addColorStop(0.86, 'rgba(0,0,0,0.85)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+  c.globalCompositeOperation = 'destination-in'; c.fillStyle = g; c.fillRect(0, 0, cw, ch); c.globalCompositeOperation = 'source-over';
+  ctx.drawImage(miniC, 0, 0);
+  // vignette
+  const v = ctx.createRadialGradient(cw / 2, ch / 2, ch * 0.35, cw / 2, ch / 2, Math.max(cw, ch) * 0.75);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.38)'); ctx.fillStyle = v; ctx.fillRect(0, 0, cw, ch);
+  ctx.restore();
+}
 function lighting() {
   const dl = daylight(); if (dl >= 0.999 && !state.lightTest) return;
   const DW = W, DH = H; // the light map is soft, so it is made at half the screen's pixels and stretched

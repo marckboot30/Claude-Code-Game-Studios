@@ -249,7 +249,7 @@ const scenes = {
   },
   play: {
     update(dt) { playUpdate(dt); },
-    draw() { hits.length = 0; drawWorld(); lighting(); drawOverWorld(); drawHUD(); },
+    draw() { hits.length = 0; drawWorld(); lighting(); if (LOOK === 'mini') miniLook(); drawOverWorld(); drawHUD(); },
   },
   pause: {
     update() { if (pressed('KeyP') || pressed('Escape') || pressed('Enter') || mouse.click) { mouse.click = false; scene = 'play'; } if (pressed('KeyN')) setMuted(!muted); },
