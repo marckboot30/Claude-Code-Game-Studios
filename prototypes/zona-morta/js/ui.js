@@ -196,7 +196,7 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 function addLight(x, y, r, c, a) { if (x < -r || y < -r || x > W + r || y > H + r) return; const g = lightCx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${c},${a})`); g.addColorStop(1, `rgba(${c},0)`); lightCx.fillStyle = g; lightCx.fillRect(x - r, y - r, r * 2, r * 2); }
 function lighting() {
   const dl = daylight(); if (dl >= 0.999 && !state.lightTest) return;
-  if (!lightCv) { lightCv = document.createElement('canvas'); lightCv.width = W; lightCv.height = H; lightCx = lightCv.getContext('2d', { willReadFrequently: true }); }
+  if (!lightCv || lightCv.width !== W || lightCv.height !== H) { lightCv = document.createElement('canvas'); lightCv.width = W; lightCv.height = H; lightCx = lightCv.getContext('2d', { willReadFrequently: true }); }
   const p = state.p, amb = tune.night_dark + (1 - tune.night_dark) * dl, h = hourOf(state.time);
   lightCx.setTransform(1, 0, 0, 1, 0, 0); lightCx.globalCompositeOperation = 'source-over'; lightCx.fillStyle = '#000'; lightCx.fillRect(0, 0, W, H); lightCx.globalCompositeOperation = 'lighter'; lightCx.setTransform(ZOOM, 0, 0, ZOOM, 0, 0);
   const [px, py] = isoS(p.x, p.y, 12);
@@ -296,6 +296,7 @@ function drawHUD() {
   if (state.ui.panel === 'inv') drawInv(); else if (state.ui.panel === 'saude') drawHealth();
   if (state.ui.map) drawMap();
   if (TOUCH && !state.ui.map) drawTouch();
+  if (state.zoomShow > 0) ptext(ctx, `ZOOM ${ZOOM}X`, W / 2, 30, '#f0d040', '#0b0d12', 2, 'center');
   if (p.hurt > 0) { ctx.fillStyle = `rgba(200,20,20,${p.hurt * 0.5})`; ctx.fillRect(0, 0, W, H); }
   if (p.sleeping) { ctx.fillStyle = 'rgba(0,0,10,0.45)'; ctx.fillRect(0, 0, W, H); ptext(ctx, 'DORMINDO...  (MEXA-SE PARA ACORDAR)', W / 2, H / 2 - 30, '#b8a0e0', '#0b0d12', 1, 'center'); }
 }
@@ -443,7 +444,7 @@ function drawTitle() {
   ctx.fillStyle = 'rgba(8,10,16,0.72)'; ctx.fillRect(0, 0, W, H);
   bigText('OS ULTIMOS DIAS', W / 2, 40, 5, '#d8d0a0'); prect(ctx, W / 2 - 155, 70, 310, 1, '#6e1418');
   ptext(ctx, 'SOBREVIVA O MAXIMO DE DIAS NUMA CIDADE INFESTADA', W / 2, 78, '#c8ccd6', '#0b0d12', 1, 'center');
-  const C = ['WASD ANDAR   SHIFT CORRER   C AGACHAR', 'CLIQUE OU ESPACO ATACAR   Q EMPURRAR', 'E VASCULHAR/USAR   TAB INVENTARIO   H SAUDE', 'B CONSTRUIR/BARRICAR   F LANTERNA   M MAPA', 'Z ZOOM   P PAUSA   N SOM'];
+  const C = ['WASD ANDAR   SHIFT CORRER   C AGACHAR', 'CLIQUE OU ESPACO ATACAR   Q EMPURRAR', 'E VASCULHAR/USAR   TAB INVENTARIO   H SAUDE', 'B CONSTRUIR/BARRICAR   F LANTERNA   M MAPA', 'Z OU + / - ZOOM   P PAUSA   N SOM'];
   C.forEach((c, k) => ptext(ctx, c, W / 2, 100 + k * 10, '#9aa2b0', '#0b0d12', 1, 'center'));
   const z = [humanImg(Object.assign(zombieLook({ outfit: 0, kind: 'comum' }), { pose: 'walk', f: Math.floor(clock.now() * 4) % 4 })), humanImg(Object.assign(zombieLook({ outfit: 2, kind: 'gordo' }), { pose: 'walk', f: (Math.floor(clock.now() * 4) + 2) % 4 })), humanImg({ skin: '#e2a57c', hair: '#4a3020', under: '#eef0f2', pose: 'idle' })];
   ctx.drawImage(z[0].c, 70, 176, 40, 56); ctx.drawImage(z[1].c, 30, 180, 40, 56); ctx.drawImage(z[2].c, W - 100, 176, 40, 56);

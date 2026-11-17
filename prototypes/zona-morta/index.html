@@ -22,7 +22,7 @@
 const params = new URLSearchParams(location.search);
 const tune = new Proxy({}, { get: (_, k) => CONFIG[k].value }); // live: tune.speed is CONFIG.speed.value
 const STEP = 1 / 60;            // simulation step in seconds; motion is per second, never per frame
-const W = 640, H = 360;         // the pixel canvas: 640x360, scaled 3x on a 1080p screen
+let W = 640, H = 360;           // the pixel canvas: 360 tall, as wide as the screen's shape (640 on 16:9, ~780 on a long phone)
 const PIXEL = true;             // pixel looks: whole-number scale, no smoothing
 const TITLE = 'Os Últimos Dias';
 const CONTROLS = ['WASD: andar', 'Shift: correr', 'Clique/Espaço: atacar', 'E: usar', 'Tab: inventário', 'B: construir', 'P: pausa', 'N: som'];
@@ -41,9 +41,10 @@ const events = []; // window.game.events: anything the game wants a run to see
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { willReadFrequently: true }); // the night light reads the frame back
 let viewScale = 1;
-function fit() { // fills the window at a whole-number scale
-  const k = Math.min(innerWidth / W, innerHeight / H);
+function fit() { // the canvas takes the screen's shape, so a phone is filled edge to edge
   const coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  W = Math.max(480, Math.min(900, Math.round(H * innerWidth / Math.max(1, innerHeight) / 2) * 2));
+  const k = Math.min(innerWidth / W, innerHeight / H);
   const s = (k < 1 || coarse) ? k : Math.floor(k); viewScale = s; // a phone fills its screen; a desktop keeps whole-number pixels
   canvas.width = W; canvas.height = H;
   canvas.style.width = (W * s) + 'px'; canvas.style.height = (H * s) + 'px';
@@ -69,13 +70,17 @@ function toLogical(e) { const r = canvas.getBoundingClientRect(); return [(e.cli
 // touch: a stick on the left moves (pushed far, it runs), round buttons on the right act
 let TOUCH = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
 const stick = { id: null, cx: 0, cy: 0, dx: 0, dy: 0, keys: new Set() };
-const TBTN = [
-  { l: 'ATACAR', c: 'Space', x: W - 32, y: H - 60, r: 18 }, { l: 'USAR', c: 'KeyE', x: W - 72, y: H - 34, r: 15 },
-  { l: 'MOCHILA', c: 'Tab', x: W - 76, y: H - 76, r: 13 }, { l: 'AGACHAR', c: 'KeyC', x: W - 30, y: H - 104, r: 12 },
-  { l: 'CONSTR', c: 'KeyB', x: W - 112, y: H - 26, r: 12 }, { l: 'SAUDE', c: 'KeyH', x: W - 112, y: H - 58, r: 11 },
-  { l: 'EMPURRA', c: 'KeyQ', x: W - 66, y: H - 112, r: 11 }, { l: 'LUZ', c: 'KeyF', x: W - 104, y: H - 92, r: 10 },
-  { l: 'PAUSA', c: 'KeyP', x: W - 86, y: 12, r: 9 },
+// buttons are placed from the right edge, so they follow the screen's width
+const TBTN_DEF = [
+  ['ATACAR', 'Space', 32, -60, 18], ['USAR', 'KeyE', 72, -34, 15], ['MOCHILA', 'Tab', 76, -76, 13], ['AGACHAR', 'KeyC', 30, -104, 12],
+  ['CONSTR', 'KeyB', 112, -26, 12], ['SAUDE', 'KeyH', 112, -58, 11], ['EMPURRA', 'KeyQ', 66, -112, 11], ['LUZ', 'KeyF', 104, -92, 10],
+  ['PAUSA', 'KeyP', 114, 14, 9], ['+', 'Equal', 86, 20, 10], ['-', 'Minus', 86, 46, 10],
 ];
+const TBTN = TBTN_DEF.map(([l, c]) => ({ l, c, x: 0, y: 0, r: 10, lit: 0 }));
+function placeButtons() { TBTN_DEF.forEach(([, , dx, dy, r], k) => { TBTN[k].x = W - dx; TBTN[k].y = dy < 0 ? H + dy : dy; TBTN[k].r = r; }); }
+placeButtons(); addEventListener('resize', placeButtons);
+// two fingers away from the stick and buttons pinch the camera in and out
+const pinch = new Map(); let pinchD = 0;
 function applyStick() {
   for (const k of stick.keys) down.delete(k); stick.keys.clear();
   const m = Math.hypot(stick.dx, stick.dy); if (m < 5) return;
@@ -88,6 +93,11 @@ function releaseStick() { stick.id = null; stick.dx = stick.dy = 0; applyStick()
 canvas.addEventListener('pointermove', e => {
   const [x, y] = toLogical(e);
   if (e.pointerId === stick.id) { stick.dx = Math.max(-28, Math.min(28, x - stick.cx)); stick.dy = Math.max(-28, Math.min(28, y - stick.cy)); applyStick(); return; }
+  if (pinch.has(e.pointerId)) {
+    pinch.set(e.pointerId, [x, y]);
+    if (pinch.size === 2) { const [a, b] = [...pinch.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinchD && d / pinchD > 1.35) { zoomReq = 1; pinchD = d; } else if (pinchD && d / pinchD < 0.74) { zoomReq = -1; pinchD = d; } }
+    return;
+  }
   if (e.pointerType === 'touch') return;
   mouse.x = x; mouse.y = y; mouse.moved = true; mouse.recent = 3;
 });
@@ -98,11 +108,12 @@ canvas.addEventListener('pointerdown', e => {
     const b = TBTN.find(q => Math.hypot(x - q.x, y - q.y) <= q.r + 4);
     if (b) { hit.add(b.c); b.lit = 0.15; e.preventDefault(); return; }
     if (x < W * 0.42 && y > H * 0.3 && stick.id === null && !state.ui.panel && !state.ui.menu) { stick.id = e.pointerId; stick.cx = x; stick.cy = y; stick.dx = stick.dy = 0; canvas.setPointerCapture(e.pointerId); return; }
+    if (e.pointerType === 'touch') { pinch.set(e.pointerId, [x, y]); if (pinch.size === 2) { const [a, b] = [...pinch.values()]; pinchD = Math.hypot(a[0] - b[0], a[1] - b[1]); mouse.click = false; return; } }
   }
   mouse.x = x; mouse.y = y; if (e.button === 0) mouse.click = true; if (e.button === 2) hit.add('KeyQ');
 });
-canvas.addEventListener('pointerup', e => { if (e.pointerId === stick.id) releaseStick(); });
-canvas.addEventListener('pointercancel', e => { if (e.pointerId === stick.id) releaseStick(); });
+canvas.addEventListener('pointerup', e => { if (e.pointerId === stick.id) releaseStick(); pinch.delete(e.pointerId); if (pinch.size < 2) pinchD = 0; });
+canvas.addEventListener('pointercancel', e => { if (e.pointerId === stick.id) releaseStick(); pinch.delete(e.pointerId); if (pinch.size < 2) pinchD = 0; });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 let zoomReq = 0;
 canvas.addEventListener('wheel', e => { zoomReq = e.deltaY < 0 ? 1 : -1; e.preventDefault(); }, { passive: false });
@@ -169,7 +180,11 @@ function playUpdate(dt) {
   state.click = mouse.click; mouse.click = false; state.clickWorld = state.click ? screenToWorld(mouse.x, mouse.y) : null;
   if (state.click) { for (const h of hits) if (mouse.x >= h.x && mouse.x < h.x + h.w && mouse.y >= h.y && mouse.y < h.y + h.h) { h.fn(); state.click = false; break; } }
   if (pressed('KeyN')) { setMuted(!muted); }
-  if (pressed('KeyZ') || pressed('Equal') || pressed('NumpadAdd') || pressed('Minus') || pressed('NumpadSubtract') || zoomReq) { ZOOM = (pressed('Minus') || pressed('NumpadSubtract') || zoomReq < 0) ? 1 : (pressed('KeyZ') ? (ZOOM === 1 ? 2 : 1) : 2); zoomReq = 0; }
+  // the camera: three whole-number zoom steps, so the pixels stay square
+  if (pressed('Equal') || pressed('NumpadAdd') || zoomReq > 0) { ZOOM = Math.min(3, ZOOM + 1); state.zoomShow = 1.2; }
+  if (pressed('Minus') || pressed('NumpadSubtract') || zoomReq < 0) { ZOOM = Math.max(1, ZOOM - 1); state.zoomShow = 1.2; }
+  if (pressed('KeyZ')) { ZOOM = ZOOM >= 3 ? 1 : ZOOM + 1; state.zoomShow = 1.2; }
+  zoomReq = 0; if (state.zoomShow > 0) state.zoomShow -= dt;
   // the map
   if (ui.map) {
     const o = state.mapOff || (state.mapOff = [0, 0]), sp = 60 * dt;

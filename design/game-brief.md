@@ -27,6 +27,7 @@ Lembrando que esse nosso jogo tem que ser cooperativo, né? Onde os outros jogad
 Modo online: Só cooperativo (todos juntos contra os zumbis, ninguém ataca ninguém; cada um pode ter a sua base ou dividir uma).
 Em questão das vantagens e desvantagens que eu verifiquei ali, depois das profissões que o jogador escolhe, o jogador tem que iniciar com apenas 5 ou 8 pontos. 8 pontos, né? Depende de cada profissão, né? Com as suas vantagens. Então, cada profissão terá uma pontuação fixa, né? Aí o jogador irá escolher suas vantagens e suas desvantagens, onde gastará seus pontos. No máximo que o jogador tem que achar é apenas usar apenas 3 vantagens e 3 desvantagens. Após isso, o jogo já inicia.
 Veja mesmo escolhendo as vantagens e desvantagens o jogo não começa isso não pode acontecer mesmo que sobre pontos o jogo tem que iniciar [jogando no celular]
+Ô Claude, se você verificar essa imagem que eu te mandei do nosso jogo, verifica que a tela do jogo não preenche a tela do celular todo, entende? Tem que pegar a tela toda do celular e tem que ter um ajuste de câmera, porque para poder verificar o Z, tipo, aproximar do jogador a câmera, depois minimizar se acaso precisar, entende? Tem que ter esse sistema, né?
 
 **Pitch:** Você acorda só de cueca, sem nada, numa cidade grande infestada, e vai de casa em casa — condomínios, galpões, fazendas, posto, hospital, biblioteca, corpo de bombeiros — juntando roupa, comida, livros e um machado, barricando a base antes que a horda quebre as janelas; no fim só conta quantos dias você aguentou.
 
