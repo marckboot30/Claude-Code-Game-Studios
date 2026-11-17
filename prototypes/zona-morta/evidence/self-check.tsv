@@ -1,0 +1,61 @@
+time	2026-11-17 11:38:29
+keep	lines	0	pinned	0
+briefword	pixel ART	unlisted	no shot at evidence/figures.png
+checklist	L1	unlisted	-	Look: pixel art limpo, isométrico 2:1 em baixa resolução com escala inteira, sem suavização, contorno escuro de 1px. Prédios em corte como na imagem do corpo de bombeiros: o prédio onde você está perde o teto e mostra os cômodos e móveis; paredes de trás altas, da frente baixas; muro de tijolo vermelho, pisos de madeira, azulejo e concreto. Paleta: grama verde-oliva, asfalto cinza-azulado, telhados tijolo e azul, zumbis verde-acinzentados, sangue vinho, itens em cores quentes. Noite em azul profundo com dither, só a lanterna e as lâmpadas iluminam. Todas as figuras desenhadas, nada de emoji ou círculos simples. Visual das imagens de prévia aprovadas.	
+checklist	L2	unlisted	-	References: imagem do corpo de bombeiros enviada (prédio em corte, cômodos à vista); Project Zomboid (a dinâmica: saque, necessidades, barulho, uma vida só, barricadas, livros de habilidade; Avoid: nome, arte, mapa, ícones e interface).	
+checklist	L3	unlisted	-	View: 2D isométrico · Camera: segue o jogador de cima em diagonal, zoom em passos inteiros	
+checklist	F1	unlisted	-	Cidade grande gerada a cada partida: centro com casas, condomínios, biblioteca, hospital, corpo de bombeiros, posto; galpões; bosques; fazendas pequenas e grandes	
+checklist	F2	unlisted	-	Começo só de cueca e sem itens; roupa por parte do corpo (cabeça, tronco, pernas, pés, mãos) dá calor e proteção contra arranhão/mordida	
+checklist	F3	unlisted	-	Temperatura e frio à noite; fome, sede, cansaço; moodles; saúde com arranhão, corte, mordida, bandagem e infecção fatal	
+checklist	F4	unlisted	-	Saque com barra em cima da cabeça, peso de carga, barulho em anéis e agachar	
+checklist	F5	unlisted	-	Zumbis em grupo, 4 tipos (comum, gordo, rastejante, corredor do dia 3) que ouvem, perseguem e quebram janelas, portas e barricadas	
+checklist	F6	unlisted	-	Armas achadas: cano, taco, faca, machado (desgaste) e pistola rara e barulhenta; machado nos armários do corpo de bombeiros	
+checklist	F7	unlisted	-	Machado corta árvores → toras → tábuas; barricar janelas e portas com tábuas e pregos; paredes de madeira no grid com prévia fantasma	
+checklist	F8	unlisted	-	Habilidades 1–10 (carpintaria, mecânica, culinária, primeiros socorros, eletricidade) que sobem só por livros do nível seguinte ou TV, com barrinha lenta	
+checklist	F9	unlisted	-	Animações: ler com livro na mão, enfaixar o braço, sentar no chão vendo TV, vasculhar, cortar, martelar	
+checklist	F10	unlisted	-	Rádio em casas aleatórias avisa: luz cai no dia 4; gerador + gasolina do posto mantêm a luz	
+checklist	F11	unlisted	-	Minimapa redondo no canto superior direito; clique abre o mapa inteiro com o explorado	
+checklist	F12	unlisted	-	Animais nas fazendas que precisam de comida e água e morrem sem cuidado (thin stand-in)	
+checklist	F13	unlisted	-	Mecânica em carros abandonados: tirar gasolina e peças (thin stand-in)	
+checklist	S1	unlisted	-	fome, sede e frio · in the slice	
+checklist	S2	unlisted	-	roupas e proteção · in the slice	
+checklist	S3	unlisted	-	tipos de lugar (casas, condomínios, galpões, fazendas, postos, hospital, biblioteca, corpo de bombeiros) · in the slice	
+checklist	S4	unlisted	-	saque e peso · in the slice	
+checklist	S5	unlisted	-	moodles · in the slice	
+checklist	S6	unlisted	-	ferimentos e infecção · in the slice	
+checklist	S7	unlisted	-	barulho e furtividade · in the slice	
+checklist	S8	unlisted	-	zumbis quebrando portas, janelas e barricadas · in the slice	
+checklist	S9	unlisted	-	corpo de bombeiros com machado nos armários · in the slice	
+checklist	S10	unlisted	-	cortar árvores e fazer madeira · in the slice	
+checklist	S11	unlisted	-	construir paredes e barricar janelas e portas · in the slice	
+checklist	S12	unlisted	-	livros e TV como única forma de aprender, níveis 1 a 10 · in the slice	
+checklist	S13	unlisted	-	animações de ler, enfaixar e assistir TV · in the slice	
+checklist	S14	unlisted	-	rádio com avisos · in the slice	
+checklist	S15	unlisted	-	corte de luz no dia 4, gerador e gasolina · in the slice	
+checklist	S16	unlisted	-	minimapa redondo que abre o mapa inteiro · in the slice	
+checklist	S17	unlisted	-	cidade grande com áreas verdes e fazendas pequenas e grandes · in the slice	
+checklist	S18	unlisted	-	dia e noite · in the slice	
+checklist	S19	unlisted	-	crafting e culinária · in the slice *(guessed)*	
+checklist	S20	unlisted	-	profissões e traços · thin stand-in *(guessed)*	
+checklist	S21	unlisted	-	animais nas fazendas que morrem sem cuidado · thin stand-in	
+checklist	S22	unlisted	-	mecânica nos carros (tirar peças e gasolina) · thin stand-in *(guessed)*	
+checklist	S23	unlisted	-	sono · thin stand-in *(guessed)*	
+checklist	M1	unlisted	-	Você acorda só de cueca no dormitório do corpo de bombeiros, tremendo, com o moodle de frio aceso.	
+checklist	M2	unlisted	-	Um brilho no armário ensina o E: a barrinha sobe em cima da cabeça e sai uma camiseta e calça; vestir baixa o frio e sobe a proteção.	
+checklist	M3	unlisted	-	Outro armário tem o machado.	
+checklist	M4	unlisted	-	Lá fora, você corre, um anel de barulho se espalha e dois zumbis lentos viram na sua direção; você mata um com o machado.	
+checklist	M5	unlisted	-	Corta uma árvore, as toras viram tábuas, e quando o céu alaranja você prega a primeira tábua na janela — à noite os zumbis batem nela e ela aguenta.	
+checklist	C1	unlisted	-	O dia 1 (cerca de 6 minutos reais) tem poucos zumbis lentos perto de você; a primeira noite traz grupos atraídos pelo barulho que atacam portas e janelas.	
+checklist	C2	unlisted	-	A cada dia a população perto de você cresce, corredores aparecem do dia 3, a luz cai no dia 4 e as casas próximas se esvaziam.	
+checklist	C3	unlisted	-	Fome, sede e frio apertam se você não sair.	
+checklist	C4	unlisted	-	Morreu (mordida, fome, sede, frio), acabou: resumo com dias sobrevividos e zumbis mortos, recomeça do zero.	
+checklist	C5	unlisted	-	*(provisional)*	
+browser	HeadlessChrome/153.0.0.0
+scene	play	0	title
+scene	play	1	criar
+scene	play	35	play
+measure	step-time	play	0.834	4.500	316
+lane	play	stop	5.3	552
+uncaught	play	0
+screen	play	drawn
+responds	changed	68

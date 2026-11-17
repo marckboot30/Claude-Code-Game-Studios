@@ -1,0 +1,9 @@
+pixel art limpo	clean isometric pixel art on a 480x270 canvas scaled by whole numbers, 1px dark outline on every figure and prop, no smoothing	evidence/play.png
+pixel ART	same as above: every tile, wall, roof, figure, icon and glyph drawn in code as pixels	evidence/figures.png
+project zomboid	the dynamics (looting, needs, noise, one life, barricades, skill books) built with an original town, art and UI; see nearest-game.txt	evidence/play.png
+corpo de bombeiro	the start building: cut-away fire station with dorm, lockers, offices, kitchen and garage with the truck, like the reference picture	evidence/play.png
+imagem	references/corpo-de-bombeiros.jpg guides the cut-away view: no roof on the building you are in, rooms and furniture in view, brick walls, garage	evidence/play.png
+minimapa	round minimap at the top right; click or M opens the whole map in the same diamond view	evidence/play.png
+bolinha redonda	the minimap is a small round disc in the top-right corner	evidence/play.png
+canto superior direito	minimap drawn at the top-right corner	evidence/play.png
+barrazinha	a small bar above the head fills slowly while reading, watching TV and every timed action	evidence/play.png

@@ -1,0 +1,1 @@
+- corpo-de-bombeiros.jpg: take: prédio isométrico em corte, sem teto, cômodos e móveis à vista, muro de tijolo, garagem, estacionamento

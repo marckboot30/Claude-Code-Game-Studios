@@ -1,0 +1,49 @@
+L1	pass	evidence/play.png	clean iso pixel art at 480x270 whole-number scale, 1px outlines, cut-away building you stand in, brick walls, wood/tile/concrete floors, olive grass, blue-grey asphalt; night blue with dither in noite-barricada.png
+L2	pass	evidence/noite-barricada.png	fire station cut away with rooms in view like the reference picture; the dynamics (loot, needs, noise, one life, barricades, skill books) with original art and UI
+L3	pass	evidence/play.png	2D isometric camera following the survivor; Z or the mouse wheel zooms in whole steps (index.html zoom, ui.js ZOOM)
+F1	pass	evidence/mapa.png	128x128 town generated from the seed: houses, condominiums, library, hospital, fire station, gas station, police, warehouses, woods, small and large farms (js/world.js:279)
+F2	pass	evidence/figures.png	starts in underwear with nothing (js/sim.js:27); clothing slots head, torso, coat, legs, feet, hands give warmth and scratch/bite protection (js/sim.js:34, js/ui.js ROUPA tab)
+F3	pass	evidence/noite-barricada.png	night temperature drops and chills by clothing (js/sim.js:193); hunger, thirst, fatigue, moodles; scratch/cut/bite wounds, bandages, fatal infection (js/sim.js:90)
+F4	pass	evidence/leitura.png	bar above the head for every timed action; carry weight (js/sim.js:33); noise rings (js/sim.js:79, ui.js drawOverWorld); crouch C (js/sim.js:144)
+F5	pass	evidence/figures.png	4 zombie kinds each with its own silhouette and speed (js/data.js:167); they hear, chase on a cost field and bash windows, doors and planks (js/sim.js:329, js/sim.js:340)
+F6	pass	js/data.js	pipe, bat, knife, axe, hammer, spear with durability; a rare loud pistol (js/data.js:55); the axe preset in a fire station locker (js/world.js:132) (line 52)
+F7	pass	js/interact.js	axe chops a tree into 2 logs; logs to planks with a saw (js/data.js:114); barricade windows/doors and wooden walls with a ghost preview (js/interact.js:241, js/ui.js:180) (line 141)
+F8	pass	evidence/leitura.png	5 skills 1-10, rising only by reading the next-level book (js/interact.js:197) or TV programs while there is power (js/interact.js:121); slow bar above the head
+F9	pass	evidence/figures.png	read with a book, bandage the arm, sit on the floor at the TV, search; chop and hammer use the swing frames (js/art.js:328)
+F10	pass	evidence/noite-barricada.png	radios in random houses and the fire station broadcast that power ends on day 4 (js/data.js:131); power off on day 4, generator fuelled from the gas pump or a car (js/interact.js)
+F11	pass	evidence/play.png	round minimap top right; click or M opens the whole map of explored ground (js/ui.js:248, js/ui.js:407, evidence/mapa.png)
+F12	pass	js/world.js	chickens and cows in pens with a trough; trough empties per animal, animals starve and die without food and water (js/sim.js:454); eggs and milk (line 238)
+F13	pass	js/interact.js	cars: siphon gasoline with Mechanics 2 and take engine parts with Mechanics 3 (js/interact.js:65) (line 64)
+S1	pass	evidence/play.png	hunger, thirst and cold with moodles and damage (js/sim.js:193)
+S2	pass	evidence/rua.png	clothes worn show on the figure and raise warmth/protection (CALOR 56 in rua.png)
+S3	pass	evidence/mapa.png	all eight kinds of place labelled on the map
+S4	pass	evidence/inventario.png	searching containers, inventory with weight and capacity
+S5	pass	evidence/noite-barricada.png	moodle badges: cold and panic shown
+S6	pass	js/sim.js	wounds by body part, infection chances, health panel H (line 90)
+S7	pass	evidence/rua.png	running makes a noise ring, zombies turn; crouching is silent
+S8	pass	js/sim.js	zombies bash planks, glass and doors, climb broken windows (line 329)
+S9	pass	js/world.js	fire station with the axe preset in a dorm locker (line 132)
+S10	pass	js/interact.js	chopping trees into logs, logs into planks (line 141)
+S11	pass	js/interact.js	barricade and wooden wall building in build mode B (line 241)
+S12	pass	js/interact.js	books and TV the only way to learn, levels 1-10 (line 197)
+S13	pass	evidence/figures.png	reading, bandaging and TV-watching poses
+S14	pass	js/data.js	radio warnings by day (line 131)
+S15	pass	js/sim.js	power cut on day 4, generator and gasoline (line 12)
+S16	pass	evidence/mapa.png	round minimap that opens the full map
+S17	pass	evidence/mapa.png	big town with green areas, small and large farms
+S18	pass	evidence/noite-barricada.png	day and night with dusk, dark nights and lights
+S19	pass	js/data.js	crafting tab: planks, rags, bandage, spear, roast meat, fried egg; cooking needs a fire or a powered stove (line 113)
+S20	pass	evidence/criar.png	5 professions and 10 traits with points (thin stand-in)
+S21	pass	js/sim.js	animals starve without care (thin stand-in) (line 454)
+S22	pass	js/interact.js	siphon gasoline and take parts from cars (thin stand-in) (line 64)
+S23	pass	js/interact.js	sleep in a bed: time speeds up, fatigue falls, a zombie wakes you (thin stand-in) (line 116)
+M1	pass	evidence/play.png	wakes in underwear in the fire station dorm with the cold moodle lit (js/sim.js:26)
+M2	pass	evidence/busca.png	a sparkle over unsearched containers nearby (js/ui.js:103); the bar fills over the head; the nearest locker holds a t-shirt and jeans
+M3	pass	js/world.js	another locker holds the axe (line 132)
+M4	pass	evidence/rua.png	running spreads a noise ring and the two slow zombies outside turn toward you
+M5	pass	evidence/noite-barricada.png	tree to logs to planks, a plank nailed on a window at dusk holds while zombies bash it
+C1	pass	js/sim.js	day of 360 real seconds; few slow zombies near the start (start_safe_radius); the first night's horde is drawn to you at 20:00 (js/sim.js:434) (line 13)
+C2	pass	js/sim.js	new zombies each dawn, runners from day 3 (js/sim.js:426), power off on day 4 (line 433)
+C3	pass	js/sim.js	hunger, thirst and cold rise and hurt until you go out for supplies (line 193)
+C4	pass	js/sim.js	death by bite, hunger, thirst or cold ends the run with days survived, kills and record (js/ui.js:302); R restarts from zero (line 217)
+C5	pass	js/sim.js	(provisional mark on the challenge: the values are config.js defaults) (line 217)
