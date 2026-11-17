@@ -311,37 +311,27 @@ function furnImg(type, v = 0, st = '') {
     case 'remedios': pbox(x, P, 0.2, 0.3, 0.6, 0.4, 20, 0, '#f0f2f4', '#dce0e4', '#c0c6cc'); faceS(x, P, 0.2, 0.7, 0.22, 0.38, 10, 15, '#d83838'); faceS(x, P, 0.2, 0.7, 0.27, 0.33, 8, 17, '#d83838'); break;
     case 'bomba': pbox(x, P, 0.3, 0.3, 0.4, 0.4, 22, 0, '#e8e8e0', '#c9302c', '#9a2420'); faceS(x, P, 0.3, 0.7, 0.08, 0.32, 14, 19, '#22242a'); faceS(x, P, 0.3, 0.7, 0.1, 0.3, 15, 18, st === 'on' ? '#7ae87a' : '#3a5a3a'); { const p = P(0.7, 0.55, 12); pline(x, p[0], p[1], p[0] + 4 * AR, p[1] + 6 * AR, '#22242a'); } break;
     case 'arvore': {
-      // a broadleaf (3 greens) or, one in four, a pine; a trunk you can see, light from the top left
+      // like the 🌳 emoji: one big round leafy crown, cloud-bumped at the edge, on a short thick trunk
       c = mkCanvas(64 * AR, 96 * AR); x = c.getContext('2d'); ox = 32 * AR; oy = 84 * AR; const Q = L(32 * AR, 84 * AR);
-      const pine = v % 4 === 3;
-      pbox(x, Q, 0.44, 0.44, 0.12, 0.12, pine ? 12 : 13, 0, '#6a4428', '#7a5232', '#4a2e1a');
-      const blob = (bx, by, r, col) => pdisc(x, Math.round(bx * AR), Math.round(by * AR), Math.round(r * AR), col, 0.85);
-      const dots = (n, col, cx0, cy0, rr, r0 = 1.2, seed = 7) => { for (let q = 0; q < n; q++) { const a = hash2(q, v, seed) * Math.PI * 2, d = Math.sqrt(hash2(v, q, seed + 2)) * rr; pdisc(x, Math.round((cx0 + Math.cos(a) * d) * AR), Math.round((cy0 + Math.sin(a) * d * 0.8) * AR), Math.round(r0 * AR), col); } };
-      if (pine) {
-        const g = ['#24402a', '#2f5434', '#447048'], top = 84 - 50;
-        // four stacked tiers, each a little cone: dark right half, light left edge
-        for (let t = 0; t < 4; t++) {
-          const ty = top + t * 8, hh = 13, w0 = 6 + t * 2.8;
-          for (let yy = 0; yy <= hh; yy++) {
-            const w = Math.round((yy / hh) * w0 * AR), y2 = (ty + yy) * AR;
-            prect(x, 32 * AR - w, y2, w, AR, g[1]); prect(x, 32 * AR, y2, w + 1, AR, g[0]);
-            if (w > 2) prect(x, 32 * AR - w, y2, Math.max(AR, Math.round(w * 0.35)), AR, g[2]);
-          }
-        }
-        dots(8, '#5a8858', 29, top + 20, 6, 0.6, 3);
-      } else {
-        const gr = [['#2f4a24', '#3e5e2c', '#577a38', '#7a9a4c'], ['#3a4a22', '#4e6230', '#6a7e3c', '#8c9c52'], ['#2a4426', '#385a30', '#4e783c', '#6e9650']][v % 3];
-        const cy = 84 - 31 - (v % 2) * 2;
-        // shadow side (bottom right), body, lit side (top left), then leaf texture
-        blob(33, cy + 3, 12, gr[0]); blob(25, cy + 1, 8, gr[0]); blob(40, cy, 8, gr[0]); blob(32, cy - 7, 9, gr[0]);
-        blob(31, cy - 1, 10, gr[1]); blob(37, cy - 4, 7, gr[1]); blob(25, cy - 3, 7, gr[1]); blob(30, cy - 9, 6, gr[1]);
-        blob(28, cy - 5, 6, gr[2]); blob(34, cy - 9, 4, gr[2]); blob(24, cy - 4, 3.5, gr[2]);
-        blob(27, cy - 8, 2.5, gr[3]); blob(32, cy - 11, 1.5, gr[3]);
-        dots(22, shade(gr[0], 0.82), 34, cy + 2, 10, 1.2, 7); dots(16, gr[2], 29, cy - 4, 8, 1, 11); dots(8, gr[3], 28, cy - 7, 4, 0.8, 13);
-      }
+      const pine = false;
+      // trunk with a little fork into the crown
+      pbox(x, Q, 0.41, 0.41, 0.18, 0.18, 12, 0, '#7a4e2c', '#8a5a34', '#5a3820');
+      const disc = (bx, by, r, col) => pdisc(x, Math.round(bx * AR), Math.round(by * AR), Math.round(r * AR), col, 0.92);
+      const gr = [['#2c6a2a', '#3c8a34', '#58aa44', '#8acc5c'], ['#30662a', '#428436', '#62a446', '#94c862'], ['#28622e', '#38803a', '#52a24a', '#84c460']][v % 3];
+      const cx = 32 + (v % 2), cy = 84 - 24 - (v % 3);
+      // the crown: a round body plus a ring of bumps, darkest low on the right, lit high on the left
+      const bumps = 10, R = 13;
+      disc(cx, cy, R + 1, gr[0]);
+      for (let q = 0; q < bumps; q++) { const a = q / bumps * Math.PI * 2 + hash2(q, v, 5) * 0.4, rr = 5 + hash2(v, q, 6) * 2; disc(cx + Math.cos(a) * R, cy + Math.sin(a) * R * 0.85, rr, gr[0]); }
+      disc(cx - 1, cy - 1, R, gr[1]);
+      for (let q = 0; q < bumps; q++) { const a = q / bumps * Math.PI * 2 + hash2(q, v, 5) * 0.4; if (Math.cos(a) + Math.sin(a) > 0.6) continue; disc(cx - 1 + Math.cos(a) * (R - 1), cy - 1 + Math.sin(a) * (R - 1) * 0.85, 4.5, gr[1]); }
+      disc(cx - 4, cy - 5, 7, gr[2]); disc(cx + 2, cy - 8, 4.5, gr[2]); disc(cx - 8, cy - 1, 4, gr[2]);
+      disc(cx - 5, cy - 7, 3, gr[3]); disc(cx + 1, cy - 10, 2, gr[3]); disc(cx - 9, cy - 3, 1.5, gr[3]);
+      // a few leaf clumps for texture
+      for (let q = 0; q < 14; q++) { const a = hash2(q, v, 21) * Math.PI * 2, d = Math.sqrt(hash2(v, q, 23)) * (R - 2); const lx = cx + Math.cos(a) * d, ly = cy + Math.sin(a) * d * 0.85; disc(lx, ly, 1.2, Math.cos(a) + Math.sin(a) > 0 ? shade(gr[0], 0.85) : gr[2]); }
       outlineCanvas(c);
       // a soft round shadow under it, after the outline so it stays soft
-      x.globalCompositeOperation = 'destination-over'; x.globalAlpha = 0.22; pdisc(x, Q(0.5, 0.5, 0)[0], Q(0.5, 0.5, 0)[1], (pine ? 7 : 9) * AR, '#000000', 0.5); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+      x.globalCompositeOperation = 'destination-over'; x.globalAlpha = 0.22; pdisc(x, Q(0.5, 0.5, 0)[0], Q(0.5, 0.5, 0)[1], 11 * AR, '#000000', 0.5); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
       break;
     }
     case 'toco': pbox(x, P, 0.38, 0.38, 0.24, 0.24, 4, 0, '#c8a070', '#6e4a2c', '#4e321c'); break;

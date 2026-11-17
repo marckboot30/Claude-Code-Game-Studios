@@ -39,6 +39,7 @@ Nosso jogo está travando
 Temos que fazer com que o jogado nascer em lugares aleatórios
 Temos que melhorar a aparência das árvores temos que reduzir um poucos
 Temos que alimentar mais o nosso mundo está muito pequeno
+Deixa a aparência das árvores assim 🌳
 
 **Pitch:** Você acorda só de cueca, sem nada, numa cidade grande infestada, e vai de casa em casa — condomínios, galpões, fazendas, posto, hospital, biblioteca, corpo de bombeiros — juntando roupa, comida, livros e um machado, barricando a base antes que a horda quebre as janelas; no fim só conta quantos dias você aguentou.
 
