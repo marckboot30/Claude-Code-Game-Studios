@@ -22,7 +22,7 @@
 const params = new URLSearchParams(location.search);
 const tune = new Proxy({}, { get: (_, k) => CONFIG[k].value }); // live: tune.speed is CONFIG.speed.value
 const STEP = 1 / 60;            // simulation step in seconds; motion is per second, never per frame
-const W = 480, H = 270;         // low-resolution pixel canvas, scaled by whole numbers
+const W = 640, H = 360;         // the pixel canvas: 640x360, scaled 3x on a 1080p screen
 const PIXEL = true;             // pixel looks: whole-number scale, no smoothing
 const TITLE = 'Os Últimos Dias';
 const CONTROLS = ['WASD: andar', 'Shift: correr', 'Clique/Espaço: atacar', 'E: usar', 'Tab: inventário', 'B: construir', 'P: pausa', 'N: som'];

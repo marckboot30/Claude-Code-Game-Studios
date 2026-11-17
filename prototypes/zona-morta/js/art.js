@@ -94,7 +94,7 @@ function wrapTxt(s, maxW) { const words = normTxt(s).split(' '), out = []; let l
 
 // ---- floors -----------------------------------------------------------------------------------
 const FLOOR_BASE = {
-  grama: ['#6f7a3c', '#6a7539', '#737e40', '#68733a'], terra: ['#7b6446'], campo: ['#6e5638'], asfalto: ['#4d5058'], faixaV: ['#4d5058'], faixaH: ['#4d5058'],
+  grama: ['#6f7a3c', '#6d783b', '#717c3e', '#6e793c'], terra: ['#7b6446'], campo: ['#6e5638'], asfalto: ['#4d5058'], faixaV: ['#4d5058'], faixaH: ['#4d5058'],
   calcada: ['#9a9a94'], madeira: ['#80542f'], azulejo: ['#d9d6cc'], piso: ['#cfc8b1'], concreto: ['#7c8088'], carpete: ['#6a5a7a'], agua: ['#3a6e9e'], areia: ['#b8a878'], terraRua: ['#8a7456'], hosp: ['#d4dde0'],
 };
 const FLOOR_SOLID = { agua: true };
@@ -107,21 +107,21 @@ function floorImg(type, v) {
   const f = (px, py) => {
     const n = hash2(px + v * 31, py + v * 17, type.length);
     switch (type) {
-      case 'grama': return n < 0.06 ? '#8a9550' : n < 0.12 ? '#5a6430' : base;
-      case 'terra': case 'terraRua': return n < 0.08 ? '#6a5438' : n < 0.12 ? '#92785a' : base;
+      case 'grama': return n < 0.025 ? '#7f8a48' : n < 0.045 ? '#636d34' : base;
+      case 'terra': case 'terraRua': return n < 0.03 ? '#705a3e' : n < 0.05 ? '#867050' : base;
       case 'campo': return ((py - px * 0.5 + 64) % 4 < 1.5) ? '#5a4428' : (n < 0.05 ? '#7d6a40' : base);
-      case 'asfalto': return n < 0.07 ? '#43464d' : n < 0.11 ? '#5a5d65' : base;
-      case 'faixaV': { const on = Math.abs((px - 16) - (py - 8) * -2) < 1.6 && (py < 6 || py > 10); return on ? '#d8d0a0' : n < 0.07 ? '#43464d' : base; }
-      case 'faixaH': { const on = Math.abs((px - 16) - (py - 8) * 2) < 1.6 && (py < 6 || py > 10); return on ? '#d8d0a0' : n < 0.07 ? '#43464d' : base; }
-      case 'calcada': return (px === 16 || (py === 8)) ? '#86867f' : n < 0.05 ? '#a8a8a2' : base;
+      case 'asfalto': return n < 0.03 ? '#484b52' : n < 0.05 ? '#53565e' : base;
+      case 'faixaV': { const on = Math.abs((px - 16) - (py - 8) * -2) < 1.6 && (py < 6 || py > 10); return on ? '#d8d0a0' : base; }
+      case 'faixaH': { const on = Math.abs((px - 16) - (py - 8) * 2) < 1.6 && (py < 6 || py > 10); return on ? '#d8d0a0' : base; }
+      case 'calcada': return (px === 16 || (py === 8)) ? '#8c8c86' : base;
       case 'madeira': { const r = ((py - px * 0.5) % 4 + 4) % 4; return r < 1 ? '#6e4626' : (n < 0.04 ? '#8c6038' : base); }
       case 'azulejo': { const a = ((py - px * 0.5) % 8 + 8) % 8, b = ((py + px * 0.5) % 8 + 8) % 8; return (a < 1 || b < 1) ? '#b8b4a8' : base; }
       case 'hosp': { const a = ((py - px * 0.5) % 8 + 8) % 8, b = ((py + px * 0.5) % 8 + 8) % 8; return (a < 1 || b < 1) ? '#b4c2c8' : base; }
       case 'piso': return ((px + py) % 8 === 0) ? '#bdb6a0' : base;
-      case 'concreto': return n < 0.06 ? '#71757d' : n < 0.1 ? '#888c94' : base;
-      case 'carpete': return n < 0.15 ? '#62526f' : base;
+      case 'concreto': return n < 0.03 ? '#767a82' : base;
+      case 'carpete': return n < 0.05 ? '#655572' : base;
       case 'agua': return (hash2(px, py, v) < 0.05) ? '#8ab8e0' : ((py + v) % 4 === 0 && n < 0.4) ? '#4a80b0' : base;
-      case 'areia': return n < 0.1 ? '#a89868' : base;
+      case 'areia': return n < 0.04 ? '#b0a070' : base;
       default: return base;
     }
   };

@@ -217,9 +217,9 @@ function lighting() {
   let ar, ag, ab;
   if (dl > 0.05 && h > 12) { ar = amb * 1.08; ag = amb * 0.86; ab = amb * 0.74; } else if (dl > 0.05) { ar = amb * 1.0; ag = amb * 0.86; ab = amb * 0.92; } else { ar = amb * 0.62; ag = amb * 0.76; ab = Math.min(1, amb * 1.1 + 0.03); }
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const k = (y * W + x) * 4, th = BAYER[(x & 3) + ((y & 3) << 2)] / 16;
+    const k = (y * W + x) * 4;
     const lr = ld[k] / 255, lg = ld[k + 1] / 255, lb = ld[k + 2] / 255;
-    const q = (v) => Math.min(1, Math.floor((v) * 6 + th) / 6);
+    const q = (v) => (v > 1 ? 1 : v); // smooth light: no dither pattern
     d[k] = d[k] * q(ar + lr * (1 - ar)); d[k + 1] = d[k + 1] * q(ag + lg * (1 - ag)); d[k + 2] = d[k + 2] * q(ab + lb * (1 - ab));
   }
   ctx.putImageData(sc, 0, 0);
