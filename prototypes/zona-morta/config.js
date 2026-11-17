@@ -68,13 +68,13 @@ window.CONFIG = {
   sight_day: { value: 9, min: 3, max: 20, step: 0.5 },             // tiles a zombie sees by day
   sight_night: { value: 4.5, min: 1, max: 15, step: 0.5 },
   sight_crouch: { value: 0.55, min: 0.2, max: 1, step: 0.05 },
-  zombies_start: { value: 330, min: 0, max: 1200, step: 10 },
-  zombies_per_day: { value: 50, min: 0, max: 300, step: 5 },       // new zombies wander in each dawn
+  zombies_start: { value: 900, min: 0, max: 3000, step: 10 },
+  zombies_per_day: { value: 60, min: 0, max: 600, step: 5 },       // new zombies wander in each dawn
   horde_base: { value: 6, min: 0, max: 40, step: 1 },              // the night horde drawn to you
   horde_per_day: { value: 3, min: 0, max: 20, step: 1 },
   runner_day: { value: 3, min: 1, max: 10, step: 1 },              // the day runners appear
   runner_chance: { value: 0.15, min: 0, max: 1, step: 0.05 },
-  start_safe_radius: { value: 11, min: 4, max: 30, step: 1 },      // no zombie this close to your bed at the start
+  start_safe_radius: { value: 13, min: 4, max: 30, step: 1 },      // no zombie this close to your bed at the start
 
   // noise, in tiles a zombie hears it from
   noise_walk: { value: 1.6, min: 0, max: 8, step: 0.2 },

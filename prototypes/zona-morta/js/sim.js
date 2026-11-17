@@ -418,7 +418,7 @@ function updateZombies(dt) {
   // visible to the survivor?
   for (const z of nz) { z.visT = (z.visT || 0) - dt; if (z.visT <= 0 || z.visible === undefined) { z.visT = 0.15 + (z.id % 5) * 0.02; z.visible = Math.hypot(z.x - p.x, z.y - p.y) < 1.5 || los(p.x, p.y, z.x, z.y); } }
   // the long dead are cleared away
-  if (world.zombies.length > 900) world.zombies = world.zombies.filter(z => !z.dead || z.deadT < 200);
+  if (world.zombies.length > 2600) world.zombies = world.zombies.filter(z => !z.dead || z.deadT < 200);
 }
 
 // ---- the world's clock: days, the horde, power, radio, farms, fires, generators -----------------

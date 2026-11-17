@@ -6,7 +6,9 @@
 // warehouses, woods, fields, and small and large farms around it.
 'use strict';
 
-const N = 128, PITCH = 16;
+const N = 256, PITCH = 16;
+// the town sits in the middle blocks, the outskirts all around; everything else follows from these
+const TOWN_B0 = 5, TOWN_B1 = 10, NB = N / PITCH;
 let world = null;
 
 function idx(i, j) { return i * N + j; }
@@ -275,16 +277,17 @@ function bigFarm(bx, by) {
 
 // ---- the whole town -----------------------------------------------------------------------------
 function blockOrigin(bx, by) { return [bx * PITCH + 3, by * PITCH + 3]; }
-function isTown(bx, by) { return bx >= 2 && bx <= 5 && by >= 2 && by <= 5; }
+function isTown(bx, by) { return bx >= TOWN_B0 && bx <= TOWN_B1 && by >= TOWN_B0 && by <= TOWN_B1; }
+const TOWN_T0 = TOWN_B0 * PITCH - 3, TOWN_T1 = (TOWN_B1 + 1) * PITCH + 2; // the town in tiles, its outer roads included
 function generateWorld() {
   world = newWorld();
   for (let k = 0; k < N * N; k++) world.fv[k] = Math.floor(rng() * 4);
   // roads: 3 tiles wide on every 16th line, a sidewalk either side in town
-  const townArea = (i, j) => i >= 29 && i <= 98 && j >= 29 && j <= 98;
+  const townArea = (i, j) => i >= TOWN_T0 && i <= TOWN_T1 && j >= TOWN_T0 && j <= TOWN_T1;
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
     const mi = ((i + 1) % PITCH), mj = ((j + 1) % PITCH);
     const rx = mi <= 2, ry = mj <= 2, sx = mi === 3 || mi === PITCH - 1, sy = mj === 3 || mj === PITCH - 1;
-    const town = townArea(i, j) || (Math.abs(i - 64) < 3 || Math.abs(j - 64) < 3);
+    const town = townArea(i, j) || (Math.abs(i - N / 2) < 3 || Math.abs(j - N / 2) < 3);
     const k = idx(i, j);
     if (rx || ry) {
       if (town) world.floor[k] = (rx && ry) ? 'asfalto' : (rx && mi === 1) ? 'faixaV' : (ry && mj === 1) ? 'faixaH' : 'asfalto';
@@ -292,8 +295,12 @@ function generateWorld() {
     } else if ((sx || sy) && townArea(i, j)) world.floor[k] = 'calcada';
   }
   // town blocks
-  const special = { '3,3': 'bombeiros', '4,3': 'biblioteca', '2,4': 'hospital', '4,4': 'posto', '5,2': 'condo', '2,2': 'condo', '3,5': 'parque', '5,5': 'delegacia' };
-  for (let bx = 0; bx < 8; bx++) for (let by = 0; by < 8; by++) {
+  // the special places land on different town blocks each game, several of each in a big town
+  const special = {}, townBlocks = [];
+  for (let bx = TOWN_B0; bx <= TOWN_B1; bx++) for (let by = TOWN_B0; by <= TOWN_B1; by++) townBlocks.push(bx + ',' + by);
+  for (const [kind, n] of [['bombeiros', 2], ['biblioteca', 2], ['hospital', 2], ['posto', 3], ['condo', 4], ['parque', 3], ['delegacia', 2]])
+    for (let c = 0; c < n && townBlocks.length; c++) special[townBlocks.splice(Math.floor(rng() * townBlocks.length), 1)[0]] = kind;
+  for (let bx = 0; bx < NB; bx++) for (let by = 0; by < NB; by++) {
     const [x0, y0] = blockOrigin(bx, by);
     if (!isTown(bx, by)) continue;
     const s = special[bx + ',' + by];
@@ -317,13 +324,13 @@ function generateWorld() {
   }
   // outskirts
   const kinds = {}, out = [];
-  for (let bx = 0; bx < 8; bx++) for (let by = 0; by < 8; by++) if (!isTown(bx, by)) out.push([bx, by]);
+  const ring1 = (bx, by) => bx >= TOWN_B0 - 2 && bx <= TOWN_B1 + 2 && by >= TOWN_B0 - 2 && by <= TOWN_B1 + 2;
+  for (let bx = 0; bx < NB; bx++) for (let by = 0; by < NB; by++) if (!isTown(bx, by)) out.push([bx, by]);
   for (const [bx, by] of out) {
-    const ring1 = bx >= 1 && bx <= 6 && by >= 1 && by <= 6;
-    kinds[bx + ',' + by] = ring1 ? wpick([['galpao', 25], ['fazendaP', 20], ['campo', 20], ['mata', 20], ['casa', 15]]) : wpick([['mata', 40], ['fazendaG', 20], ['fazendaP', 15], ['campo', 25]]);
+    kinds[bx + ',' + by] = ring1(bx, by) ? wpick([['galpao', 25], ['fazendaP', 20], ['campo', 20], ['mata', 20], ['casa', 15]]) : wpick([['mata', 40], ['fazendaG', 20], ['fazendaP', 15], ['campo', 25]]);
   }
-  const force = (kind, n, ring) => { let have = Object.values(kinds).filter(k => k === kind).length; const cands = out.filter(([bx, by]) => (ring ? (bx >= 1 && bx <= 6 && by >= 1 && by <= 6) : true) && !['galpao', 'fazendaP', 'fazendaG'].includes(kinds[bx + ',' + by])); while (have < n && cands.length) { const c = cands.splice(Math.floor(rng() * cands.length), 1)[0]; kinds[c[0] + ',' + c[1]] = kind; have++; } };
-  force('galpao', 2, true); force('fazendaP', 2, true); force('fazendaG', 2, false);
+  const force = (kind, n, ring) => { let have = Object.values(kinds).filter(k => k === kind).length; const cands = out.filter(([bx, by]) => (ring ? ring1(bx, by) : true) && !['galpao', 'fazendaP', 'fazendaG'].includes(kinds[bx + ',' + by])); while (have < n && cands.length) { const c = cands.splice(Math.floor(rng() * cands.length), 1)[0]; kinds[c[0] + ',' + c[1]] = kind; have++; } };
+  force('galpao', 6, true); force('fazendaP', 6, true); force('fazendaG', 6, false);
   let firstGen = true;
   for (const [bx, by] of out) {
     const [x0, y0] = blockOrigin(bx, by), k = kinds[bx + ',' + by];
@@ -331,7 +338,7 @@ function generateWorld() {
     else if (k === 'fazendaP') smallFarm(bx, by);
     else if (k === 'fazendaG') bigFarm(bx, by);
     else if (k === 'casa') { house(x0 + 2, y0 + 3, rint(6, 8), 5, 'N', 'madeira'); }
-    const dens = k === 'mata' ? 0.42 : k === 'campo' ? 0.05 : 0.04;
+    const dens = k === 'mata' ? 0.27 : k === 'campo' ? 0.03 : 0.03;
     for (let i = x0 - 1; i < x0 + 12; i++) for (let j = y0 - 1; j < y0 + 12; j++) {
       if (!inMap(i, j) || world.bld[idx(i, j)] >= 0 || world.furn[idx(i, j)]) continue;
       const fl = world.floor[idx(i, j)]; if (fl !== 'grama') continue;
@@ -342,12 +349,12 @@ function generateWorld() {
     if (k === 'campo' && rng() < 0.4) { const ci = x0 + rint(2, 6), cj = y0 + rint(2, 6); for (let i = ci; i < ci + 3; i++) for (let j = cj; j < cj + 2; j++) { world.floor[idx(i, j)] = 'agua'; world.furn[idx(i, j)] = null; } world.pois.push({ n: 'Lagoa', i: ci + 1.5, j: cj + 1, k: 'lagoa' }); }
   }
   // street lamps and abandoned cars
-  for (let i = 30; i < 98; i++) for (let j = 30; j < 98; j++) {
+  for (let i = TOWN_T0; i <= TOWN_T1; i++) for (let j = TOWN_T0; j <= TOWN_T1; j++) {
     const k = idx(i, j); if (world.floor[k] !== 'calcada' || world.furn[k]) continue;
     if ((i * 3 + j * 5) % 23 === 0) { placeFurn('poste', i, j, { solid: false }); world.lamps.push([i + 0.5, j + 0.5]); }
   }
   let cars = 0, tries = 0;
-  while (cars < 34 && tries++ < 4000) {
+  while (cars < 130 && tries++ < 16000) {
     const i = rint(2, N - 4), j = rint(2, N - 4), mi = (i + 1) % PITCH, mj = (j + 1) % PITCH;
     const alongJ = mi <= 2 && mj > 3 && mj < PITCH - 3, alongI = mj <= 2 && mi > 3 && mi < PITCH - 3;
     if (!alongJ && !alongI) continue;
@@ -366,9 +373,9 @@ function generateWorld() {
     spawnZombie(x, y, 'comum'); n++;
   }
   let placed = 0; tries = 0;
-  while (placed < tune.zombies_start && tries++ < 20000) {
-    const town = rng() < 0.72;
-    const i = town ? 30 + rng() * 68 : rng() * (N - 2) + 1, j = town ? 30 + rng() * 68 : rng() * (N - 2) + 1;
+  while (placed < tune.zombies_start && tries++ < 60000) {
+    const town = rng() < 0.45; // about the old crowding in town, spread over a bigger one
+    const TS = TOWN_T1 - TOWN_T0, i = town ? TOWN_T0 + 1 + rng() * TS : rng() * (N - 2) + 1, j = town ? TOWN_T0 + 1 + rng() * TS : rng() * (N - 2) + 1;
     const k = idx(Math.floor(i), Math.floor(j));
     if (world.furn[k] && world.furn[k].solid) continue; if (world.floor[k] === 'agua') continue;
     if (Math.hypot(i - s.i, j - s.j) < tune.start_safe_radius) continue;
@@ -378,7 +385,9 @@ function generateWorld() {
   buildMapImage();
 }
 function chooseStart() {
-  const homes = world.buildings.filter(b => ['casa', 'condominio', 'fazenda', 'bombeiros'].includes(b.type));
+  // pick the kind of place first, so the many houses and farms of a big world don't crowd out the rest
+  const kinds = [['casa', 45], ['condominio', 20], ['fazenda', 20], ['bombeiros', 15]].filter(([t]) => world.buildings.some(b => b.type === t));
+  const kind = wpick(kinds), homes = world.buildings.filter(b => b.type === kind);
   const b = homes[Math.floor(rng() * homes.length)];
   const free = [];
   for (let i = b.x0; i < b.x1; i++) for (let j = b.y0; j < b.y1; j++) { const k = idx(i, j); if (world.bld[k] === b.id && !world.furn[k] && world.floor[k] !== 'agua') free.push([i, j]); }
@@ -405,13 +414,16 @@ let mapCanvas = null, fogCanvas = null;
 function mapXY(i, j) { return [i - j + N - 1, Math.floor((i + j) / 2)]; }
 function buildMapImage() {
   mapCanvas = mkCanvas(2 * N, N); fogCanvas = mkCanvas(2 * N, N);
-  const x = mapCanvas.getContext('2d');
+  const x = mapCanvas.getContext('2d'), img = x.createImageData(2 * N, N), d = img.data, rgb = {};
+  const toRgb = c => rgb[c] || (rgb[c] = [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
     const k = idx(i, j), b = world.bld[k];
     let col = b >= 0 ? BLD_COL[world.buildings[b].type] || '#a8885a' : MAP_COL[world.floor[k]] || '#5e6a32';
     const f = world.furn[k]; if (f && f.t === 'arvore') col = '#3a4a22';
-    const [px, py] = mapXY(i, j); x.fillStyle = col; x.fillRect(px, py, 2, 1);
+    const [px, py] = mapXY(i, j), c = toRgb(col);
+    for (let q = 0; q < 2; q++) { const o = (py * 2 * N + px + q) * 4; d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255; }
   }
+  x.putImageData(img, 0, 0);
   const fx = fogCanvas.getContext('2d'); fx.fillStyle = '#0b0d12'; fx.fillRect(0, 0, 2 * N, N);
 }
 function explore(ci, cj, r) {

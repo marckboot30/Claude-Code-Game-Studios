@@ -451,7 +451,7 @@ function drawMap() {
   ctx.save(); ctx.beginPath(); ctx.rect(x + 2, y + 12, w - 4, h - 22); ctx.clip();
   const ox = Math.round(x + w / 2 - (mx + off[0]) * S), oy = Math.round(y + h / 2 - (my + off[1]) * S);
   ctx.imageSmoothingEnabled = false; ctx.drawImage(mapCanvas, ox, oy, mapCanvas.width * S, mapCanvas.height * S); ctx.drawImage(fogCanvas, ox, oy, fogCanvas.width * S, fogCanvas.height * S);
-  for (const q of world.pois) { if (!world.explored[idx(Math.floor(q.i), Math.floor(q.j))]) continue; const [qx, qy] = mapXY(q.i, q.j), sx = ox + qx * S, sy = oy + qy * S; prect(ctx, sx - 1, sy - 1, 3, 3, '#f0ead8'); ptext(ctx, q.n, sx + 4, sy - 2, '#f0ead8'); }
+  for (const q of world.pois) { if (!world.explored[idx(Math.floor(q.i), Math.floor(q.j))]) continue; const [qx, qy] = mapXY(q.i, q.j), sx = ox + qx * S, sy = oy + qy * S; const minor = q.k === 'mata' || q.k === 'animal' || q.k === 'lagoa'; prect(ctx, sx - 1, sy - 1, 3, 3, minor ? '#9aa2b0' : '#f0ead8'); if (!minor) ptext(ctx, q.n, sx + 4, sy - 2, '#f0ead8'); } // woods, pens and ponds stay dots: a big map would drown in names
   for (const g of state.gens) { const [qx, qy] = mapXY(g.i, g.j); ptext(ctx, 'GERADOR', ox + qx * S + 4, oy + qy * S - 2, '#9ad08a'); }
   const sx = ox + mx * S, sy = oy + my * S; if (Math.floor(state.t * 3) % 2) { prect(ctx, sx - 2, sy - 2, 5, 5, '#0b0d12'); prect(ctx, sx - 1, sy - 1, 3, 3, '#f0d040'); }
   ctx.restore();

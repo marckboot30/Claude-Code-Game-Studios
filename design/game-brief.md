@@ -37,6 +37,8 @@ Nosso jogo está travando muito tenta dá uma arrumada nisso
 Ô Claude, o nosso jogo no servidor ainda está travando, tá? Não foi corrigido nada. Dá uma verificada no nosso servidor ali, verifica se tem algum problema lá e tenta corrigir, por favor. Porque eu fiz um teste por dentro do Claude normal aqui e tá funcionando de boa, mas lá no servidor tá travando.
 Nosso jogo está travando
 Temos que fazer com que o jogado nascer em lugares aleatórios
+Temos que melhorar a aparência das árvores temos que reduzir um poucos
+Temos que alimentar mais o nosso mundo está muito pequeno
 
 **Pitch:** Você acorda só de cueca, sem nada, numa cidade grande infestada, e vai de casa em casa — condomínios, galpões, fazendas, posto, hospital, biblioteca, corpo de bombeiros — juntando roupa, comida, livros e um machado, barricando a base antes que a horda quebre as janelas; no fim só conta quantos dias você aguentou.
 
