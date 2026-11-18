@@ -18,10 +18,13 @@
 <body>
 <canvas id="g3d"></canvas>
 <canvas id="game"></canvas>
-<script type="module">
-// three.js, for the 3D view; the game starts when it is here (or in 2D without it)
-import * as THREE from './vendor/three.module.min.js';
-window.THREE = THREE; window.dispatchEvent(new Event('three-ready'));
+<script>
+// the game is pixel art; the 3D view is kept, and loads only with ?look=3d in the address
+if (new URLSearchParams(location.search).get('look') === '3d') {
+  const m = document.createElement('script'); m.type = 'module';
+  m.textContent = "import * as THREE from './vendor/three.module.min.js'; window.THREE = THREE; window.dispatchEvent(new Event('three-ready'));";
+  document.head.appendChild(m);
+}
 </script>
 <script src="config.js"></script>
 <script>
@@ -353,7 +356,7 @@ function boot() {
   else { requestAnimationFrame(frame); setInterval(timer, 50); }
   window.game.ready = true;
 }
-if (window.THREE || params.get('look') === '2d') boot();
+if (window.THREE || params.get('look') !== '3d') boot();
 else { addEventListener('three-ready', boot, { once: true }); setTimeout(boot, 6000); }
 </script>
 </body>

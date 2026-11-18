@@ -5,7 +5,7 @@
 // unit (x = i, z = j, y up). The ground is one mesh whose shader picks a photographed surface per
 // tile; each building's walls are merged into a few meshes and rebuilt cut low when you are inside;
 // doors, windows, fences and built walls are small meshes kept in step with their state.
-// The 2D canvas stays on top for the HUD. ?look=2d keeps the old pixel view.
+// The 2D canvas stays on top for the HUD. Kept as an option: it runs only with ?look=3d.
 'use strict';
 
 const R3 = { on: false };
@@ -17,7 +17,7 @@ const GROUND_CELL = { grama: 0, asfalto: 1, calcada: 2, terra: 3, campo: 4, made
 /** Starts the 3D view when three.js has loaded and the device can draw it; false keeps the 2D view. */
 function r3Init() {
   const T = window.THREE;
-  if (!T || params.get('look') === '2d') return false;
+  if (!T || params.get('look') !== '3d') return false; // pixel art is the game's look; 3D only when asked for
   let renderer;
   try { renderer = new T.WebGLRenderer({ canvas: document.getElementById('g3d'), antialias: true, powerPreference: 'high-performance' }); }
   catch (e) { return false; }
