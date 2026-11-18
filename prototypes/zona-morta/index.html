@@ -1,0 +1,363 @@
+<!doctype html>
+<!-- PROTOTYPE - NOT FOR PRODUCTION -->
+<!-- Question: vasculhar a cidade só de cueca, sob a pressão do barulho, do frio e da fome, e montar uma base barricada é tenso e divertido por 20 minutos? -->
+<!-- Date: 2026-11-17 -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Os Últimos Dias</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #08090c; overflow: hidden; }
+  body { font-variant-numeric: tabular-nums; }
+  canvas { display: block; margin: 0 auto; cursor: crosshair; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #game { position: relative; z-index: 1; }
+  #g3d { position: absolute; z-index: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="g3d"></canvas>
+<canvas id="game"></canvas>
+<script>
+// the game is pixel art; the 3D view is kept, and loads only with ?look=3d in the address
+if (new URLSearchParams(location.search).get('look') === '3d') {
+  const m = document.createElement('script'); m.type = 'module';
+  m.textContent = "import * as THREE from './vendor/three.module.min.js'; window.THREE = THREE; window.dispatchEvent(new Event('three-ready'));";
+  document.head.appendChild(m);
+}
+</script>
+<script src="config.js"></script>
+<script>
+'use strict';
+// ---- Built to be checked ----------------------------------------------------------------
+const params = new URLSearchParams(location.search);
+const tune = new Proxy({}, { get: (_, k) => CONFIG[k].value }); // live: tune.speed is CONFIG.speed.value
+const STEP = 1 / 60;            // simulation step in seconds; motion is per second, never per frame
+let W = 640, H = 360;           // the pixel canvas: 360 tall, as wide as the screen's shape (640 on 16:9, ~780 on a long phone)
+const PIXEL = true;             // pixel looks: whole-number scale, no smoothing
+const TITLE = 'Os Últimos Dias';
+const CONTROLS = ['WASD: andar', 'Shift: correr', 'Clique/Espaço: atacar', 'E: usar', 'Tab: inventário', 'B: construir', 'P: pausa', 'N: som'];
+const clock = window.GAME_CLOCK || { now: () => performance.now() / 1000 }; // a check may inject one
+const CHEAP = params.get('render') === 'cheap';
+let seed;
+function rng() { // mulberry32; every gameplay random call reads this, never Math.random
+  seed = (seed + 0x6D2B79F5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), seed | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const events = []; // window.game.events: anything the game wants a run to see
+
+// ---- Screen ---------------------------------------------------------------------------
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let viewScale = 1;
+const AR_SCREEN = 2; // the art's resolution, must match AR in js/art.js
+// RS: the screen's pixels per logical pixel. 2 shows every art pixel; a device that cannot keep up drops it to 1.5 or 1
+let RS = 2, perfEma = 16, perfSlow = 0, fpsShow = 60, fpsN = 0, fpsT = 0;
+function fit() { // the canvas takes the screen's shape, so a phone is filled edge to edge
+  const coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  W = Math.max(480, Math.min(900, Math.round(H * innerWidth / Math.max(1, innerHeight) / 2) * 2));
+  const k = Math.min(innerWidth / W, innerHeight / H);
+  const s = (k < 1 || coarse) ? k : Math.floor(k); viewScale = s; // a phone fills its screen; a desktop keeps whole-number pixels
+  canvas.width = Math.round(W * RS); canvas.height = Math.round(H * RS); // the world in fine pixels, the HUD in logical ones
+  canvas.style.width = (W * s) + 'px'; canvas.style.height = (H * s) + 'px';
+  canvas.style.marginTop = Math.max(0, Math.floor((innerHeight - H * s) / 2)) + 'px';
+  canvas.style.imageRendering = 'pixelated';
+  ctx.setTransform(RS, 0, 0, RS, 0, 0); ctx.imageSmoothingEnabled = false;
+  if (typeof r3Resize === 'function') r3Resize();
+}
+addEventListener('resize', fit); fit();
+
+// ---- Input: keys by position (event.code), OS key repeat ignored ------------------------
+const down = new Set(), hit = new Set();
+const pressed = code => hit.has(code); // true for one step after the key goes down
+addEventListener('keydown', e => {
+  startAudio();
+  if (!e.repeat) { down.add(e.code); hit.add(e.code); }
+  if (e.code === 'Space' || e.code === 'Tab' || e.code.startsWith('Arrow')) e.preventDefault();
+});
+addEventListener('keyup', e => down.delete(e.code));
+addEventListener('blur', () => down.clear());
+// the mouse aims, clicks attack, clicks the minimap and the panels
+const mouse = { x: W / 2, y: H / 2, moved: false, recent: 0, click: false };
+function toLogical(e) { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; }
+// touch: a stick on the left moves (pushed far, it runs), round buttons on the right act
+let TOUCH = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+const stick = { id: null, cx: 0, cy: 0, dx: 0, dy: 0, keys: new Set() };
+// buttons are placed from the right edge, so they follow the screen's width
+const TBTN_DEF = [
+  ['ATACAR', 'Space', 32, -60, 18], ['USAR', 'KeyE', 72, -34, 15], ['MOCHILA', 'Tab', 76, -76, 13], ['AGACHAR', 'KeyC', 30, -104, 12],
+  ['CONSTR', 'KeyB', 112, -26, 12], ['SAUDE', 'KeyH', 112, -58, 11], ['EMPURRA', 'KeyQ', 66, -112, 11], ['LUZ', 'KeyF', 104, -92, 10],
+  ['PAUSA', 'KeyP', 86, 14, 9],
+];
+const TBTN = TBTN_DEF.map(([l, c]) => ({ l, c, x: 0, y: 0, r: 10, lit: 0 }));
+function placeButtons() { TBTN_DEF.forEach(([, , dx, dy, r], k) => { TBTN[k].x = W - dx; TBTN[k].y = dy < 0 ? H + dy : dy; TBTN[k].r = r; }); }
+placeButtons(); addEventListener('resize', placeButtons);
+// two fingers away from the stick and buttons pinch the camera in and out
+const pinch = new Map(); let pinchD = 0, pinchZ = 1, zoomMul = 1;
+function applyStick() {
+  for (const k of stick.keys) down.delete(k); stick.keys.clear();
+  const m = Math.hypot(stick.dx, stick.dy); if (m < 5) return;
+  const add = k => { down.add(k); stick.keys.add(k); };
+  if (stick.dx > m * 0.38) add('KeyD'); if (stick.dx < -m * 0.38) add('KeyA');
+  if (stick.dy > m * 0.38) add('KeyS'); if (stick.dy < -m * 0.38) add('KeyW');
+  if (m > 22) add('ShiftLeft');
+}
+function releaseStick() { stick.id = null; stick.dx = stick.dy = 0; applyStick(); }
+canvas.addEventListener('pointermove', e => {
+  const [x, y] = toLogical(e);
+  if (e.pointerId === stick.id) { stick.dx = Math.max(-28, Math.min(28, x - stick.cx)); stick.dy = Math.max(-28, Math.min(28, y - stick.cy)); applyStick(); return; }
+  if (pinch.has(e.pointerId)) {
+    pinch.set(e.pointerId, [x, y]);
+    if (pinch.size === 2 && pinchD) { const [a, b] = [...pinch.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); ZOOM = Math.max(0.75, Math.min(3, pinchZ * d / pinchD)); if (state) state.zoomShow = 0.8; } // fingers apart: closer, together: farther
+    return;
+  }
+  if (e.pointerType === 'touch') return;
+  mouse.x = x; mouse.y = y; mouse.moved = true; mouse.recent = 3;
+});
+canvas.addEventListener('pointerdown', e => {
+  startAudio(); const [x, y] = toLogical(e);
+  if (e.pointerType === 'touch') TOUCH = true;
+  if (TOUCH && scene === 'play' && state && !state.ui.map) {
+    const b = TBTN.find(q => !q.hidden && Math.hypot(x - q.x, y - q.y) <= q.r + 4);
+    if (b) { hit.add(b.c); b.lit = 0.15; e.preventDefault(); return; }
+    if (x < W * 0.42 && y > H * 0.3 && stick.id === null && !state.ui.panel && !state.ui.menu) { stick.id = e.pointerId; stick.cx = x; stick.cy = y; stick.dx = stick.dy = 0; canvas.setPointerCapture(e.pointerId); return; }
+    if (e.pointerType === 'touch') { pinch.set(e.pointerId, [x, y]); if (pinch.size === 2) { const [a, b] = [...pinch.values()]; pinchD = Math.max(1, Math.hypot(a[0] - b[0], a[1] - b[1])); pinchZ = ZOOM; mouse.click = false; return; } }
+  }
+  mouse.x = x; mouse.y = y; if (e.button === 0) mouse.click = true; if (e.button === 2) hit.add('KeyQ');
+});
+canvas.addEventListener('pointerup', e => { if (e.pointerId === stick.id) releaseStick(); pinch.delete(e.pointerId); if (pinch.size < 2) pinchD = 0; });
+canvas.addEventListener('pointercancel', e => { if (e.pointerId === stick.id) releaseStick(); pinch.delete(e.pointerId); if (pinch.size < 2) pinchD = 0; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+let zoomReq = 0;
+// (kept for the pinch's steps)
+canvas.addEventListener('wheel', e => { zoomMul *= Math.pow(1.0015, -e.deltaY); e.preventDefault(); }, { passive: false }); // the wheel zooms smoothly
+
+// ---- Audio: started on first input, mute on N --------------------------------------------
+let audio = null, muted = false;
+function startAudio() {
+  if (!audio) {
+    const ac = window.GAME_AUDIO || new (window.AudioContext || window.webkitAudioContext)(); // a check may inject one
+    const out = ac.createGain(); out.gain.value = muted ? 0 : tune.volume;
+    out.connect(ac.destination); audio = { ac, out };
+  }
+  if (audio.ac.state === 'suspended') audio.ac.resume();
+}
+let hostMuted = false; // PlayDrop's own sound switch
+function setMuted(m) { muted = m; if (audio) audio.out.gain.value = (m || hostMuted) ? 0 : tune.volume; }
+addEventListener('tune', () => setMuted(muted));
+function tone(freq, dur, type = 'square', vol = 0.3, delay = 0) {
+  if (!audio || muted) return;
+  const t = audio.ac.currentTime + delay, o = audio.ac.createOscillator(), g = audio.ac.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(audio.out); o.start(t); o.stop(t + dur);
+}
+</script>
+<script src="js/art.js"></script>
+<script src="js/data.js"></script>
+<script src="js/world.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/interact.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/r3models.js"></script>
+<script src="js/r3people.js"></script>
+<script src="js/render3d.js"></script>
+<script>
+'use strict';
+// ---- Scenes -----------------------------------------------------------------------------
+// title -> criar (the survivor) -> play; pause; over (one life: death ends the run).
+// figures: every zombie kind, the survivor and the animals side by side (?scene=figures).
+let scene, state;
+function reset() {
+  // seed 0 in config.js: a new town and a new place to wake every game; ?seed= or a number there repeats one
+  seed = Number(params.get('seed')) || CONFIG.seed || ((Date.now() % 2147483647) | 0);
+  generateWorld();
+  r3Build();
+  state = {
+    t: 0, time: 0, killed: 0, dead: false, cause: '', gained: '', record: 0, deathT: 0,
+    msgs: [], noises: [], subs: [], decals: [], near: [], targets: [], dayMarks: [],
+    ui: { panel: null, tab: 0, sel: 0, cont: null, contSel: 0, menu: null, build: null, map: false },
+    prof: PROFS[0], traits: new Set(), create: { prof: 0, traits: new Set() },
+    fires: [], gens: [], radios: [], powerT: 0, exploreT: 0, radioSlot: -1, felt: 15,
+    tut: 0, tutLast: 0, tutSearch: false, tutBarr: false, muzzle: 0, mx: W / 2, my: H / 2,
+  };
+  state.p = newPlayer();
+  if (params.get('hour')) state.time = (Number(params.get('hour')) - tune.start_hour + 24) % 24; // a check's view of another hour
+  for (const f of world.furn) if (f && (f.t === 'radio' || f.t === 'tv') && !state.radios.includes(f)) state.radios.push(f);
+  explore(state.p.x, state.p.y, 13);
+  updateZombies(0); state.targets = targetsNear();
+  msg(`Você acordou só de cueca: ${world.start.name || 'um lugar estranho'}. Está frio.`, '#9fd3f0');
+}
+function beginPlay() {
+  const c = state.create; state.prof = PROFS[c.prof]; state.traits = new Set(c.traits);
+  state.p.stamina = 100; scene = 'play'; sfx('door');
+}
+function playUpdate(dt) {
+  const ui = state.ui, p = state.p;
+  // the mouse
+  state.mx = mouse.x; state.my = mouse.y; state.mouseMoved = mouse.moved; mouse.moved = false;
+  mouse.recent = Math.max(0, mouse.recent - dt); state.mouseRecent = mouse.recent > 0;
+  state.click = mouse.click; mouse.click = false; state.clickWorld = state.click ? screenToWorld(mouse.x, mouse.y) : null;
+  if (state.click) { for (const h of hits) if (mouse.x >= h.x && mouse.x < h.x + h.w && mouse.y >= h.y && mouse.y < h.y + h.h) { h.fn(); state.click = false; break; } }
+  if (pressed('KeyN')) { setMuted(!muted); }
+  // the camera: three whole-number zoom steps, so the pixels stay square
+  // the camera: a free zoom from far (0.6x) to close (3x), by the wheel, two fingers or the keys
+  if (pressed('Equal') || pressed('NumpadAdd')) zoomMul *= 1.25;
+  if (pressed('Minus') || pressed('NumpadSubtract')) zoomMul /= 1.25;
+  if (pressed('KeyZ')) { ZOOM = ZOOM < 1.5 ? 2 : 1; state.zoomShow = 0.8; }
+  if (zoomMul !== 1) { ZOOM = Math.max(0.75, Math.min(3, ZOOM * zoomMul)); zoomMul = 1; state.zoomShow = 0.8; }
+  zoomReq = 0; if (state.zoomShow > 0) state.zoomShow -= dt;
+  // the map
+  if (ui.map) {
+    const o = state.mapOff || (state.mapOff = [0, 0]), sp = 60 * dt;
+    if (down.has('ArrowLeft') || down.has('KeyA')) o[0] -= sp; if (down.has('ArrowRight') || down.has('KeyD')) o[0] += sp;
+    if (down.has('ArrowUp') || down.has('KeyW')) o[1] -= sp / 2; if (down.has('ArrowDown') || down.has('KeyS')) o[1] += sp / 2;
+    if (pressed('KeyM') || pressed('Escape')) ui.map = false;
+    state.click = false;
+  } else {
+    const used = panelInput();
+    if (!used && !ui.menu) {
+      if (pressed('Tab') || pressed('KeyI')) { ui.panel = 'inv'; ui.sel = 0; }
+      else if (pressed('KeyH')) { ui.panel = 'saude'; ui.sel = 0; }
+      else if (pressed('KeyB') && !ui.panel) { ui.build = ui.build ? null : { opt: 0 }; }
+      else if (pressed('KeyM')) { ui.map = true; state.mapOff = [0, 0]; }
+      else if (pressed('KeyF')) { if (hasTool(p, 'lanterna')) { p.light = !p.light; sfx('click'); } else msg('Você não tem lanterna.', '#a0a6b0'); }
+      else if (pressed('KeyE') && !ui.panel && !ui.build) { if (p.sleeping) wake('Você levantou.'); else interact(); }
+      else if ((pressed('KeyP') || pressed('Escape')) && !ui.panel) { if (ui.build) ui.build = null; else { scene = 'pause'; return; } }
+    }
+    if (ui.panel && state.click) state.click = false;
+    if (ui.menu && state.click) { ui.menu = null; state.click = false; } // a tap outside the menu closes it
+  }
+  if (p.sleeping && (p.moving || pressed('KeyW') || pressed('KeyA') || pressed('KeyS') || pressed('KeyD'))) wake('Você levantou.');
+  updatePlayer(dt);
+  if (state.dead) return;
+  updateZombies(dt);
+  updateAnimals(dt);
+  updateWorldClock(dt);
+  state.targets = targetsNear();
+  state.muzzle = Math.max(0, state.muzzle - dt);
+  // the hints advance as you do things
+  const T = TUT[state.tut]; if (T && T.done()) { state.tut++; state.tutLast = 0; } else state.tutLast += dt;
+  state.t += dt;
+}
+const scenes = {
+  figures: {
+    update(dt) { state.t += dt; },
+    draw() { drawFigures(); },
+  },
+  title: {
+    update() { if (pressed('Enter') || pressed('Space') || mouse.click) { mouse.click = false; scene = 'criar'; } },
+    draw() { drawTitle(); },
+  },
+  criar: {
+    update() {
+      const c = state.create;
+      if (mouse.click) { for (const h of hits) if (mouse.x >= h.x && mouse.x < h.x + h.w && mouse.y >= h.y && mouse.y < h.y + h.h) { h.fn(); break; } mouse.click = false; }
+      if (pressed('ArrowDown') || pressed('KeyS')) { c.prof = (c.prof + 1) % PROFS.length; while (createPoints() < 0 && c.traits.size) { const g = TRAITS.find(t => c.traits.has(t.id) && t.c < 0); if (!g) break; c.traits.delete(g.id); } }
+      if (pressed('ArrowUp') || pressed('KeyW')) { c.prof = (c.prof + PROFS.length - 1) % PROFS.length; while (createPoints() < 0 && c.traits.size) { const g = TRAITS.find(t => c.traits.has(t.id) && t.c < 0); if (!g) break; c.traits.delete(g.id); } }
+      for (let k = 0; k < TRAITS.length; k++) if (pressed('Digit' + ((k + 1) % 10))) toggleTrait(TRAITS[k].id);
+      if ((pressed('Enter') || pressed('Space') || state.startTap) && createPoints() >= 0) { state.startTap = false; beginPlay(); }
+      if (pressed('Escape')) scene = 'title';
+    },
+    draw() { drawCreate(); },
+  },
+  play: {
+    update(dt) { playUpdate(dt); },
+    draw() { hits.length = 0; drawWorld(); lighting(); if (LOOK === 'mini') miniLook(); drawOverWorld(); drawHUD(); },
+  },
+  pause: {
+    update() { if (pressed('KeyP') || pressed('Escape') || pressed('Enter') || mouse.click) { mouse.click = false; scene = 'play'; } if (pressed('KeyN')) setMuted(!muted); },
+    draw() {
+      scenes.play.draw(); ctx.fillStyle = 'rgba(8,10,16,0.75)'; ctx.fillRect(0, 0, W, H);
+      ptext(ctx, 'PAUSADO', W / 2, 40, '#f0ead8', '#0b0d12', 4, 'center');
+      const C = ['WASD ANDAR   SHIFT CORRER (BARULHO)   C AGACHAR (SILENCIO)', 'CLIQUE OU ESPACO ATACAR   Q OU BOTAO DIREITO EMPURRAR', 'E VASCULHAR / USAR / PEGAR / ABRIR PORTA', 'TAB INVENTARIO (SETAS, ENTER USA, X LARGA)   H SAUDE E BANDAGENS', 'B CONSTRUIR: BARRICAR, PAREDE, FOGUEIRA, DESMONTAR', 'F LANTERNA   M MAPA (OU CLIQUE NO MINIMAPA)   RODA DO MOUSE ZOOM   N SOM ' + (muted ? '(MUDO)' : '(LIGADO)'), '', 'P OU ESC VOLTA'];
+      C.forEach((c, k) => ptext(ctx, c, W / 2, 90 + k * 12, '#c8ccd6', '#0b0d12', 1, 'center'));
+    },
+  },
+  over: {
+    update(dt) { state.deathT += dt; if (state.deathT > 1 && (pressed('KeyR') || pressed('Enter') || mouse.click)) { mouse.click = false; reset(); scene = 'criar'; } mouse.click = false; },
+    draw() { drawOver(); },
+  },
+};
+
+// ---- Loop: fixed step, frame time clamped ---------------------------------------------
+function step() {
+  if (!pdPaused) scenes[scene].update(STEP); hit.clear(); // PlayDrop's pause menu stops the world
+}
+let last, acc = 0, ALPHA = 1;
+function tick() {
+  const now = clock.now();
+  acc += Math.min(now - last, 0.25); last = now;
+  let n = 0; while (acc >= STEP && n < 4) { step(); acc -= STEP; n++; } // a slow phone never piles up steps
+  if (acc > STEP) acc = 0;
+  ALPHA = acc / STEP;
+  const t0 = performance.now(); drawFrame(); const ft = performance.now() - t0;
+  fpsN++; fpsT += 1; if (now - (tick.t0 || 0) >= 1) { fpsShow = fpsN / Math.max(0.001, now - (tick.t0 || now - 1)); fpsN = 0; tick.t0 = now; } // frames per second, shown on screen
+  // automatic quality: a device that keeps missing frames draws with fewer pixels
+  perfEma = perfEma * 0.85 + ft * 0.15;
+  if (R3.on) { // 3D: judged by frames per second, since the drawing happens on the graphics chip
+    if (scene === 'play' && !pdPaused && fpsShow < 40) { tick.slowT = (tick.slowT || 0) + Math.min(0.25, now - (tick.prevNow || now)); if (tick.slowT > 3) { tick.slowT = 0; r3QualityDown(); fpsShow = 60; } } else tick.slowT = 0;
+    tick.prevNow = now;
+  } else if (scene === 'play' && perfEma > 22 && RS > 1) { if (++perfSlow > 30) { RS = RS > 1.6 ? 1.5 : 1; perfSlow = 0; perfEma = 14; fit(); } } else perfSlow = Math.max(0, perfSlow - 1);
+}
+function drawFrame() { hits.length = 0; scenes[scene].draw(); if (TOUCH && innerHeight > innerWidth) { ctx.fillStyle = 'rgba(8,10,16,0.85)'; ctx.fillRect(0, H / 2 - 16, W, 32); ptext(ctx, 'VIRE O CELULAR NA HORIZONTAL', W / 2, H / 2 - 6, '#f0d040', '#0b0d12', 2, 'center'); } }
+function frame() { tick(); requestAnimationFrame(frame); }
+function timer() { if (document.visibilityState === 'visible' && clock.now() - last > 0.1) tick(); }
+
+// ---- What a check can read and drive (?manual=1 stops the loop; players never see it) ----
+window.game = {
+  get scene() { return scene; },
+  get state() { return state; },
+  press(code) { hit.add(code); },
+  hold(code, on) { on ? down.add(code) : down.delete(code); },
+  get events() { return events; },
+  step(n = 1, draw = true, alpha = 1) {
+    for (let i = 0; i < n; i++) step();
+    if (draw) { ALPHA = alpha; drawFrame(); }
+  },
+};
+
+// ---- PlayDrop: its loading screen, pause menu, sound switch and corner buttons -------------
+let PD = null, pdPaused = false, HUD_TL = { x: 0, y: 0 }, HUD_TR = { x: 0, y: 0 };
+function pdCorners(c) { // the host's buttons cover the top corners on phones: the HUD moves out from under them
+  const k = 1 / Math.max(0.01, viewScale), tl = c && c.topLeft, tr = c && c.topRight;
+  HUD_TL = { x: tl && tl.width ? Math.ceil(tl.width * k) + 2 : 0, y: 0 }; HUD_TR = { x: 0, y: tr && tr.height ? Math.ceil(tr.height * k) + 2 : 0 };
+}
+if (/(^|\.)playdrop\.ai$/.test(location.hostname)) {
+  const sc = document.createElement('script'); sc.src = 'https://assets.playdrop.ai/sdk/playdrop.js';
+  sc.onload = async () => {
+    try {
+      PD = await playdrop.init();
+      pdPaused = !!PD.host.isPaused;
+      PD.host.onPause(() => { pdPaused = true; down.clear(); });
+      PD.host.onResume(() => { pdPaused = false; last = clock.now(); acc = 0; });
+      const allow = a => { hostMuted = !a; setMuted(muted); if (a && audio) audio.ac.resume().catch(() => {}); };
+      allow(PD.host.audioAllowed !== false); if (PD.host.onAudioAllowedChange) PD.host.onAudioAllowedChange(allow);
+      pdCorners(PD.host.reservedCorners); if (PD.host.onReservedCornersChange) PD.host.onReservedCornersChange(pdCorners);
+      const pause = TBTN.find(b => b.c === 'KeyP'); if (pause) pause.hidden = true; // PlayDrop has its own pause
+      requestAnimationFrame(() => PD.host.ready());
+    } catch (e) { /* outside a PlayDrop page the game runs on its own */ }
+  };
+  document.head.appendChild(sc);
+}
+// the game starts once three.js has loaded (the 3D view), or in 2D if it cannot
+let booted = false;
+function boot() {
+  if (booted) return; booted = true;
+  r3Init();
+  reset();
+  prewarmSprites();
+  scene = params.get('scene') || 'title';
+  if (scene === 'play') beginPlay();
+  last = clock.now();
+  if (params.get('manual') === '1') drawFrame();
+  else { requestAnimationFrame(frame); setInterval(timer, 50); }
+  window.game.ready = true;
+}
+if (window.THREE || params.get('look') !== '3d') boot();
+else { addEventListener('three-ready', boot, { once: true }); setTimeout(boot, 6000); }
+</script>
+</body>
+</html>

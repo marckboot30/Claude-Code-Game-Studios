@@ -1,0 +1,236 @@
+# The one-shot's small check (check-run/1).
+# Written by one-shot-check.sh --record: the results are /prototype's reading of
+# evidence/self-check.tsv; never edited by hand.
+kind: check-run/1
+engine: web
+browser: "HeadlessChrome/153.0.0.0"
+time: "2026-11-17 11:38:29"
+checks:
+  - id: boots
+    result: pass
+    evidence:
+      - "evidence/self-check.tsv"
+  - id: shot
+    result: not_run
+    mark: not assessed
+    why: "the check's own capture wrote 0 bytes in this sandbox (page-shot.sh also fails into the project folder but works into the scratchpad); a page-shot.sh capture of play copied to evidence/play.png was looked at"
+    evidence:
+  - id: outlines
+    result: pass
+    evidence:
+      - "evidence/figures.png"
+  - id: brief-words
+    result: pass
+    evidence:
+      - "evidence/brief-words.tsv"
+  - id: emoji
+    result: pass
+    evidence:
+      - "evidence/self-check.tsv"
+  - id: nearest-game
+    result: pass
+    evidence:
+      - "evidence/nearest-game.txt"
+brief_checklist:
+  - id: L1
+    result: pass
+    evidence: "evidence/play.png"
+    item: "Look: pixel art limpo, isométrico 2:1 em baixa resolução com escala inteira, sem suavização, contorno escuro de 1px. Prédios em corte como na imagem do corpo de bombeiros: o prédio onde você está perde o teto e mostra os cômodos e móveis; paredes de trás altas, da frente baixas; muro de tijolo vermelho, pisos de madeira, azulejo e concreto. Paleta: grama verde-oliva, asfalto cinza-azulado, telhados tijolo e azul, zumbis verde-acinzentados, sangue vinho, itens em cores quentes. Noite em azul profundo com dither, só a lanterna e as lâmpadas iluminam. Todas as figuras desenhadas, nada de emoji ou círculos simples. Visual das imagens de prévia aprovadas."
+  - id: L2
+    result: pass
+    evidence: "evidence/noite-barricada.png"
+    item: "References: imagem do corpo de bombeiros enviada (prédio em corte, cômodos à vista); Project Zomboid (a dinâmica: saque, necessidades, barulho, uma vida só, barricadas, livros de habilidade; Avoid: nome, arte, mapa, ícones e interface)."
+  - id: L3
+    result: pass
+    evidence: "evidence/play.png"
+    item: "View: 2D isométrico · Camera: segue o jogador de cima em diagonal, zoom em passos inteiros"
+  - id: F1
+    result: pass
+    evidence: "evidence/mapa.png"
+    item: "Cidade grande gerada a cada partida: centro com casas, condomínios, biblioteca, hospital, corpo de bombeiros, posto; galpões; bosques; fazendas pequenas e grandes"
+  - id: F2
+    result: pass
+    evidence: "evidence/figures.png"
+    item: "Começo só de cueca e sem itens; roupa por parte do corpo (cabeça, tronco, pernas, pés, mãos) dá calor e proteção contra arranhão/mordida"
+  - id: F3
+    result: pass
+    evidence: "evidence/noite-barricada.png"
+    item: "Temperatura e frio à noite; fome, sede, cansaço; moodles; saúde com arranhão, corte, mordida, bandagem e infecção fatal"
+  - id: F4
+    result: pass
+    evidence: "evidence/leitura.png"
+    item: "Saque com barra em cima da cabeça, peso de carga, barulho em anéis e agachar"
+  - id: F5
+    result: pass
+    evidence: "evidence/figures.png"
+    item: "Zumbis em grupo, 4 tipos (comum, gordo, rastejante, corredor do dia 3) que ouvem, perseguem e quebram janelas, portas e barricadas"
+  - id: F6
+    result: pass
+    evidence: "js/data.js"
+    item: "Armas achadas: cano, taco, faca, machado (desgaste) e pistola rara e barulhenta; machado nos armários do corpo de bombeiros"
+  - id: F7
+    result: pass
+    evidence: "js/interact.js"
+    item: "Machado corta árvores → toras → tábuas; barricar janelas e portas com tábuas e pregos; paredes de madeira no grid com prévia fantasma"
+  - id: F8
+    result: pass
+    evidence: "evidence/leitura.png"
+    item: "Habilidades 1–10 (carpintaria, mecânica, culinária, primeiros socorros, eletricidade) que sobem só por livros do nível seguinte ou TV, com barrinha lenta"
+  - id: F9
+    result: pass
+    evidence: "evidence/figures.png"
+    item: "Animações: ler com livro na mão, enfaixar o braço, sentar no chão vendo TV, vasculhar, cortar, martelar"
+  - id: F10
+    result: pass
+    evidence: "evidence/noite-barricada.png"
+    item: "Rádio em casas aleatórias avisa: luz cai no dia 4; gerador + gasolina do posto mantêm a luz"
+  - id: F11
+    result: pass
+    evidence: "evidence/play.png"
+    item: "Minimapa redondo no canto superior direito; clique abre o mapa inteiro com o explorado"
+  - id: F12
+    result: pass
+    evidence: "js/world.js"
+    item: "Animais nas fazendas que precisam de comida e água e morrem sem cuidado (thin stand-in)"
+  - id: F13
+    result: pass
+    evidence: "js/interact.js"
+    item: "Mecânica em carros abandonados: tirar gasolina e peças (thin stand-in)"
+  - id: S1
+    result: pass
+    evidence: "evidence/play.png"
+    item: "fome, sede e frio · in the slice"
+  - id: S2
+    result: pass
+    evidence: "evidence/rua.png"
+    item: "roupas e proteção · in the slice"
+  - id: S3
+    result: pass
+    evidence: "evidence/mapa.png"
+    item: "tipos de lugar (casas, condomínios, galpões, fazendas, postos, hospital, biblioteca, corpo de bombeiros) · in the slice"
+  - id: S4
+    result: pass
+    evidence: "evidence/inventario.png"
+    item: "saque e peso · in the slice"
+  - id: S5
+    result: pass
+    evidence: "evidence/noite-barricada.png"
+    item: "moodles · in the slice"
+  - id: S6
+    result: pass
+    evidence: "js/sim.js"
+    item: "ferimentos e infecção · in the slice"
+  - id: S7
+    result: pass
+    evidence: "evidence/rua.png"
+    item: "barulho e furtividade · in the slice"
+  - id: S8
+    result: pass
+    evidence: "js/sim.js"
+    item: "zumbis quebrando portas, janelas e barricadas · in the slice"
+  - id: S9
+    result: pass
+    evidence: "js/world.js"
+    item: "corpo de bombeiros com machado nos armários · in the slice"
+  - id: S10
+    result: pass
+    evidence: "js/interact.js"
+    item: "cortar árvores e fazer madeira · in the slice"
+  - id: S11
+    result: pass
+    evidence: "js/interact.js"
+    item: "construir paredes e barricar janelas e portas · in the slice"
+  - id: S12
+    result: pass
+    evidence: "js/interact.js"
+    item: "livros e TV como única forma de aprender, níveis 1 a 10 · in the slice"
+  - id: S13
+    result: pass
+    evidence: "evidence/figures.png"
+    item: "animações de ler, enfaixar e assistir TV · in the slice"
+  - id: S14
+    result: pass
+    evidence: "js/data.js"
+    item: "rádio com avisos · in the slice"
+  - id: S15
+    result: pass
+    evidence: "js/sim.js"
+    item: "corte de luz no dia 4, gerador e gasolina · in the slice"
+  - id: S16
+    result: pass
+    evidence: "evidence/mapa.png"
+    item: "minimapa redondo que abre o mapa inteiro · in the slice"
+  - id: S17
+    result: pass
+    evidence: "evidence/mapa.png"
+    item: "cidade grande com áreas verdes e fazendas pequenas e grandes · in the slice"
+  - id: S18
+    result: pass
+    evidence: "evidence/noite-barricada.png"
+    item: "dia e noite · in the slice"
+  - id: S19
+    result: pass
+    evidence: "js/data.js"
+    item: "crafting e culinária · in the slice *(guessed)*"
+  - id: S20
+    result: pass
+    evidence: "evidence/criar.png"
+    item: "profissões e traços · thin stand-in *(guessed)*"
+  - id: S21
+    result: pass
+    evidence: "js/sim.js"
+    item: "animais nas fazendas que morrem sem cuidado · thin stand-in"
+  - id: S22
+    result: pass
+    evidence: "js/interact.js"
+    item: "mecânica nos carros (tirar peças e gasolina) · thin stand-in *(guessed)*"
+  - id: S23
+    result: pass
+    evidence: "js/interact.js"
+    item: "sono · thin stand-in *(guessed)*"
+  - id: M1
+    result: pass
+    evidence: "evidence/play.png"
+    item: "Você acorda só de cueca no dormitório do corpo de bombeiros, tremendo, com o moodle de frio aceso."
+  - id: M2
+    result: pass
+    evidence: "evidence/busca.png"
+    item: "Um brilho no armário ensina o E: a barrinha sobe em cima da cabeça e sai uma camiseta e calça; vestir baixa o frio e sobe a proteção."
+  - id: M3
+    result: pass
+    evidence: "js/world.js"
+    item: "Outro armário tem o machado."
+  - id: M4
+    result: pass
+    evidence: "evidence/rua.png"
+    item: "Lá fora, você corre, um anel de barulho se espalha e dois zumbis lentos viram na sua direção; você mata um com o machado."
+  - id: M5
+    result: pass
+    evidence: "evidence/noite-barricada.png"
+    item: "Corta uma árvore, as toras viram tábuas, e quando o céu alaranja você prega a primeira tábua na janela — à noite os zumbis batem nela e ela aguenta."
+  - id: C1
+    result: pass
+    evidence: "js/sim.js"
+    item: "O dia 1 (cerca de 6 minutos reais) tem poucos zumbis lentos perto de você; a primeira noite traz grupos atraídos pelo barulho que atacam portas e janelas."
+  - id: C2
+    result: pass
+    evidence: "js/sim.js"
+    item: "A cada dia a população perto de você cresce, corredores aparecem do dia 3, a luz cai no dia 4 e as casas próximas se esvaziam."
+  - id: C3
+    result: pass
+    evidence: "js/sim.js"
+    item: "Fome, sede e frio apertam se você não sair."
+  - id: C4
+    result: pass
+    evidence: "js/sim.js"
+    item: "Morreu (mordida, fome, sede, frio), acabou: resumo com dias sobrevividos e zumbis mortos, recomeça do zero."
+  - id: C5
+    result: pass
+    evidence: "js/sim.js"
+    item: "*(provisional)*"
+measures:
+  - id: step-time
+    value: 4.500
+    unit: ms
+    by: browser
+    detail: "mean 0.834 ms, slowest 4.500 ms, 316 steps"
