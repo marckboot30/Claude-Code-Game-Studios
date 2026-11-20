@@ -1,0 +1,68 @@
+// PROTOTYPE - NOT FOR PRODUCTION
+// Question: Andar em primeira pessoa por uma cidadezinha vasculhando casas atrás de comida e água, com fome e sede caindo, já é tenso e divertido?
+// Date: 2026-11-20
+// Every tuning value lives here, each with value, min, max and step. The game reads them live
+// through tune.<name> (index.html); the tweak panel, an add-on, writes them back here.
+window.CONFIG = {
+  seed: 1, // every gameplay random call reads rng(), seeded from this (or ?seed= in the address)
+
+  // --- Necessidades (100 = cheio). Começo calmo: drenam devagar. ---
+  hunger_drain: { value: 6, min: 1, max: 30, step: 0.5 },     // pontos por minuto real (~16 min de cheio a zero)
+  thirst_drain: { value: 9, min: 1, max: 30, step: 0.5 },     // pontos por minuto real (~11 min)
+  run_thirst_mult: { value: 2, min: 1, max: 4, step: 0.25 },  // correr gasta sede mais rápido
+  starve_damage: { value: 12, min: 2, max: 60, step: 1 },     // saúde perdida por minuto por necessidade zerada
+  regen_threshold: { value: 60, min: 20, max: 95, step: 5 },  // fome e sede acima disto: a saúde volta
+  regen_rate: { value: 4, min: 0, max: 20, step: 0.5 },       // saúde recuperada por minuto
+  start_hunger: { value: 85, min: 10, max: 100, step: 5 },
+  start_thirst: { value: 85, min: 10, max: 100, step: 5 },
+
+  // --- Tempo ---
+  day_length: { value: 600, min: 120, max: 1800, step: 30 },  // segundos reais por dia de jogo (24 h)
+  start_hour: { value: 8, min: 0, max: 23, step: 1 },          // hora em que a partida começa
+
+  // --- Saque ---
+  search_time: { value: 2.2, min: 0.5, max: 6, step: 0.1 },   // segundos segurando E para vasculhar
+  slots: { value: 6, min: 3, max: 9, step: 1 },                // espaços na mochila
+  loot_mult: { value: 1, min: 0.25, max: 2, step: 0.05 },     // multiplica a quantidade máxima por móvel
+  refill_days: { value: 1.5, min: 0.5, max: 5, step: 0.25 },  // dias até um móvel vazio poder ter algo de novo
+  refill_chance: { value: 0.45, min: 0, max: 1, step: 0.05 }, // chance de ter algo quando reabastece
+  locked_chance: { value: 0.2, min: 0, max: 0.8, step: 0.05 },// casas trancadas com tábuas
+
+  // --- Itens: quanto cada um enche (pontos) ---
+  beans_food: { value: 35, min: 0, max: 100, step: 1 },       // lata de feijão
+  beans_thirst: { value: -5, min: -30, max: 30, step: 1 },
+  bar_food: { value: 15, min: 0, max: 100, step: 1 },         // barra de cereal
+  apple_food: { value: 10, min: 0, max: 100, step: 1 },       // maçã
+  apple_thirst: { value: 6, min: 0, max: 100, step: 1 },
+  water_thirst: { value: 40, min: 0, max: 100, step: 1 },     // garrafa d'água
+  soda_thirst: { value: 25, min: 0, max: 100, step: 1 },      // refrigerante
+  soda_food: { value: 5, min: 0, max: 100, step: 1 },
+  bandage_health: { value: 25, min: 0, max: 100, step: 1 },   // curativo
+  sardine_food: { value: 30, min: 0, max: 100, step: 1 },     // sardinha vencida
+  spoiled_sick_chance: { value: 0.35, min: 0, max: 1, step: 0.05 }, // chance de passar mal com a sardinha
+  sick_time: { value: 60, min: 10, max: 300, step: 5 },       // segundos doente
+  sick_damage: { value: 15, min: 0, max: 60, step: 1 },       // saúde perdida por minuto doente
+
+  // --- Movimento ---
+  walk_speed: { value: 3.2, min: 1, max: 8, step: 0.1 },      // m/s
+  run_speed: { value: 5.6, min: 2, max: 12, step: 0.1 },      // m/s com Shift
+  turn_speed: { value: 2.2, min: 0.5, max: 5, step: 0.1 },    // rad/s nas setas
+  mouse_sens: { value: 0.0022, min: 0.0005, max: 0.006, step: 0.0001 },
+  player_radius: { value: 0.35, min: 0.2, max: 0.6, step: 0.05 }, // m
+
+  // --- Mundo ---
+  flashlight_power: { value: 60, min: 5, max: 150, step: 5 },
+  fog_day_far: { value: 150, min: 40, max: 250, step: 5 },    // m de visibilidade de dia
+  fog_night_far: { value: 50, min: 15, max: 150, step: 5 },   // m à noite
+
+  volume: { value: 0.5, min: 0, max: 1, step: 0.05 },
+
+  // Tabelas de saque por tipo de móvel: [item, peso], e quantos itens (mín..máx).
+  loot: {
+    geladeira: { min: 0, max: 2, items: [['agua', 4], ['refri', 3], ['maca', 2], ['sardinha', 1]] },
+    armario: { min: 0, max: 2, items: [['feijao', 3], ['cereal', 3], ['sardinha', 2], ['agua', 1]] },
+    caixa: { min: 0, max: 1, items: [['cereal', 2], ['agua', 2], ['curativo', 1], ['feijao', 1]] },
+    comoda: { min: 0, max: 1, items: [['curativo', 2], ['cereal', 2], ['maca', 1]] },
+    prateleira: { min: 0, max: 3, items: [['feijao', 3], ['cereal', 2], ['agua', 3], ['refri', 2], ['sardinha', 2]] },
+  },
+};
