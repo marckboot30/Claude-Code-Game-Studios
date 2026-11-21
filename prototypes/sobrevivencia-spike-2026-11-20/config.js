@@ -28,6 +28,17 @@ window.CONFIG = {
   refill_chance: { value: 0.45, min: 0, max: 1, step: 0.05 }, // chance de ter algo quando reabastece
   locked_chance: { value: 0.2, min: 0, max: 0.8, step: 0.05 },// casas trancadas com tábuas
 
+  // --- Fabricação ---
+  stack_max: { value: 5, min: 1, max: 20, step: 1 },           // materiais por espaço da mochila
+  chop_time: { value: 3.5, min: 0.5, max: 10, step: 0.25 },     // segundos segurando E numa árvore para 1 lenha
+  chop_reach: { value: 1.6, min: 0.8, max: 3, step: 0.1 },      // m até o tronco
+  craft_extra_slots: { value: 3, min: 1, max: 6, step: 1 },     // espaços a mais da mochila reforçada
+  fire_hours: { value: 6, min: 1, max: 24, step: 0.5 },         // horas de jogo que a fogueira fica acesa
+  fire_reach: { value: 3, min: 1, max: 8, step: 0.25 },         // m da fogueira para cozinhar
+  fire_light: { value: 22, min: 2, max: 80, step: 1 },          // força da luz da fogueira
+  beans_cooked_food: { value: 55, min: 0, max: 100, step: 1 },  // feijão quente
+  sardine_cooked_food: { value: 35, min: 0, max: 100, step: 1 },// sardinha assada (sem risco)
+
   // --- Itens: quanto cada um enche (pontos) ---
   beans_food: { value: 35, min: 0, max: 100, step: 1 },       // lata de feijão
   beans_thirst: { value: -5, min: -30, max: 30, step: 1 },
@@ -68,9 +79,9 @@ window.CONFIG = {
   // Tabelas de saque por tipo de móvel: [item, peso], e quantos itens (mín..máx).
   loot: {
     geladeira: { min: 0, max: 2, items: [['agua', 4], ['refri', 3], ['maca', 2], ['sardinha', 1]] },
-    armario: { min: 0, max: 2, items: [['feijao', 3], ['cereal', 3], ['sardinha', 2], ['agua', 1]] },
-    caixa: { min: 0, max: 1, items: [['cereal', 2], ['agua', 2], ['curativo', 1], ['feijao', 1]] },
-    comoda: { min: 0, max: 1, items: [['curativo', 2], ['cereal', 2], ['maca', 1]] },
-    prateleira: { min: 0, max: 3, items: [['feijao', 3], ['cereal', 2], ['agua', 3], ['refri', 2], ['sardinha', 2]] },
+    armario: { min: 0, max: 2, items: [['feijao', 3], ['cereal', 3], ['sardinha', 2], ['agua', 1], ['pano', 2], ['fita', 1], ['fosforos', 1]] },
+    caixa: { min: 0, max: 2, items: [['cereal', 2], ['agua', 2], ['curativo', 1], ['feijao', 1], ['fita', 2], ['pano', 2], ['fosforos', 1]] },
+    comoda: { min: 0, max: 2, items: [['curativo', 2], ['cereal', 2], ['maca', 1], ['pano', 3], ['fosforos', 2]] },
+    prateleira: { min: 0, max: 3, items: [['feijao', 3], ['cereal', 2], ['agua', 3], ['refri', 2], ['sardinha', 2], ['fosforos', 1], ['fita', 1]] },
   },
 };

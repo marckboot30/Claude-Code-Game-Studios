@@ -40,10 +40,10 @@ const TITLE = 'SOBREVIVÊNCIA';
 const CONTROLS = TOUCH ? [
   'Polegar esquerdo: andar   ·   Arraste à direita: olhar',
   'Segure VASCULHAR perto de um móvel   ·   Toque na mochila: comer / beber',
-  'Botões: correr, lanterna, câmera e pausa',
+  'Botões: correr, lanterna, fabricar, câmera e pausa',
 ] : [
   'W A S D: andar   ·   Mouse: olhar (ou setas ← →)   ·   Shift: correr',
-  'Segure E: vasculhar móveis   ·   1 a 6: comer / beber / usar',
+  'Segure E: vasculhar móveis e cortar lenha   ·   1 a 9: usar item   ·   C: fabricar',
   'F: lanterna   ·   V: trocar câmera   ·   P ou Esc: pausa   ·   M: som',
 ];
 const clock = window.GAME_CLOCK || { now: () => performance.now() / 1000 };
@@ -141,6 +141,7 @@ function layoutButtons() { // the right thumb's column, kept clear of the backpa
   BTN.flash = { x: W - 80, y: H - 295, r: 40, label: 'LANTERNA' };
   BTN.pause = { x: W - 44, y: 44, r: 28, label: '' };
   BTN.view = { x: W - 112, y: 44, r: 28, label: '' };
+  BTN.craft = { x: W - 215, y: H - 330, r: 40, label: 'FABRICAR' };
 }
 layoutButtons();
 function toLogical(e) {
@@ -148,7 +149,7 @@ function toLogical(e) {
   return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
 }
 function slotAt(p) {
-  const n = tune.slots, sz = 66, gap = 8, x0 = W / 2 - (n * (sz + gap) - gap) / 2, y0 = H - sz - 16;
+  const n = capacity(), sz = 66, gap = 8, x0 = W / 2 - (n * (sz + gap) - gap) / 2, y0 = H - sz - 16;
   if (p.y < y0 || p.y > y0 + sz) return -1;
   const i = Math.floor((p.x - x0) / (sz + gap));
   return i >= 0 && i < n && (p.x - x0) - i * (sz + gap) <= sz ? i : -1;
@@ -180,9 +181,11 @@ addEventListener('pointerdown', e => {
       else if (k === 'flash') hit.add('KeyF');
       else if (k === 'pause') hit.add('KeyP');
       else if (k === 'view') hit.add('KeyV');
+      else if (k === 'craft') hit.add('KeyC');
       return;
     }
   }
+  if (state.craftOpen) { const ri = craftRowAt(p); if (ri >= 0) hit.add('Digit' + (ri + 1)); else if (ri === -2) state.craftOpen = false; return; }
   const si = slotAt(p);
   if (si >= 0) { hit.add('Digit' + (si + 1)); return; }
   if (p.x < W * 0.45 && !touch.joy) touch.joy = { id: e.pointerId, ox: p.x, oy: p.y, x: p.x, y: p.y };
@@ -222,8 +225,8 @@ function drawTouch() {
   ctx.globalAlpha = 1;
   for (const k in BTN) {
     const b = BTN[k];
-    const on = (k === 'run' && touch.run) || (k === 'flash' && state.flash) || (k === 'search' && down.has('KeyE'));
-    const ready = k === 'search' && state.aim;
+    const on = (k === 'run' && touch.run) || (k === 'flash' && state.flash) || (k === 'search' && down.has('KeyE')) || (k === 'craft' && state.craftOpen);
+    const ready = (k === 'search' && (state.aim || state.tree)) || (k === 'craft' && !state.craftOpen && nearFire());
     ctx.fillStyle = on ? 'rgba(225,212,180,0.55)' : ready ? 'rgba(200,180,120,0.45)' : 'rgba(20,20,18,0.4)';
     ctx.strokeStyle = ready || on ? 'rgba(255,240,210,0.95)' : 'rgba(230,225,210,0.5)'; ctx.lineWidth = ready ? 3 : 2;
     ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -237,6 +240,10 @@ function drawTouch() {
       ctx.fillRect(b.x - 16, b.y - 12, 16, 9); ctx.beginPath(); ctx.moveTo(b.x, b.y - 14); ctx.lineTo(b.x + 6, b.y - 18); ctx.lineTo(b.x + 6, b.y + 1); ctx.lineTo(b.x, b.y - 3); ctx.fill();
       if (state.flash) { ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.moveTo(b.x + 8, b.y - 16); ctx.lineTo(b.x + 22, b.y - 22); ctx.lineTo(b.x + 22, b.y + 5); ctx.lineTo(b.x + 8, b.y - 1); ctx.fill(); ctx.globalAlpha = 1; }
     } else if (k === 'pause') { ctx.fillRect(b.x - 9, b.y - 11, 6, 22); ctx.fillRect(b.x + 3, b.y - 11, 6, 22); }
+    else if (k === 'craft') { // hammer over a plank
+      ctx.fillRect(b.x - 16, b.y + 2, 30, 6);
+      ctx.save(); ctx.translate(b.x + 2, b.y - 8); ctx.rotate(-0.6); ctx.fillRect(-3, -4, 6, 22); ctx.fillRect(-10, -10, 20, 8); ctx.restore();
+    }
     else if (k === 'view') { // camera body with a lens; a small figure when in third person
       ctx.fillRect(b.x - 13, b.y - 7, 22, 15); ctx.beginPath(); ctx.moveTo(b.x + 9, b.y - 2); ctx.lineTo(b.x + 15, b.y - 7); ctx.lineTo(b.x + 15, b.y + 8); ctx.lineTo(b.x + 9, b.y + 3); ctx.fill();
       ctx.fillStyle = '#222'; ctx.font = `700 11px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(viewMode === 3 ? '3ª' : '1ª', b.x - 2, b.y + 1);
@@ -299,6 +306,9 @@ const sfx = {
   sick: () => tone(140, 0.6, 'sawtooth', 0.05, -60),
   heart: () => { tone(55, 0.12, 'sine', 0.35); setTimeout(() => tone(50, 0.12, 'sine', 0.25), 160); }, // sound only, not game logic
   click: () => tone(1200, 0.03, 'square', 0.05),
+  chop: () => { noise(0.09, 180, 0.35, 1.2); tone(110, 0.08, 'triangle', 0.15, -40); },
+  craft: () => { noise(0.15, 1200, 0.12, 1.5); tone(440, 0.12, 'triangle', 0.1); tone(660, 0.18, 'triangle', 0.08); },
+  fire: () => { for (let i = 0; i < 6; i++) noise(0.05, 2500, 0.1, 3, i * 0.07); noise(0.6, 400, 0.12, 0.7, 0.3); },
 };
 
 // ---- Items ---------------------------------------------------------------------------
@@ -309,6 +319,12 @@ const ITEMS = {
   agua: { name: "Garrafa d'água", use() { need('thirst', tune.water_thirst); sfx.drink(); } },
   refri: { name: 'Refrigerante', use() { need('thirst', tune.soda_thirst); need('hunger', tune.soda_food); sfx.drink(); } },
   curativo: { name: 'Curativo', use() { need('health', tune.bandage_health); sfx.pick(); } },
+  feijao_quente: { name: 'Feijão quente', use() { need('hunger', tune.beans_cooked_food); sfx.eat(); } },
+  sardinha_assada: { name: 'Sardinha assada', use() { need('hunger', tune.sardine_cooked_food); sfx.eat(); } },
+  pano: { name: 'Pano', material: true },
+  fita: { name: 'Fita adesiva', material: true },
+  fosforos: { name: 'Fósforos', material: true },
+  lenha: { name: 'Lenha', material: true },
   sardinha: {
     name: 'Sardinha vencida', use() {
       need('hunger', tune.sardine_food); sfx.eat();
@@ -541,7 +557,8 @@ function car(x, z, rot, mi) {
   boxes.push({ x0: x - hx, x1: x + hx, z0: z - hz, z1: z + hz });
 }
 
-const houses = [];
+const houses = [], trees = [];
+let treeTrunks = null; // the instanced trunks: the camera stops in front of them
 const BOUND = { x0: -62, x1: 62, z0: -165, z1: 128 };
 function buildWorld() {
   // ground, road, sidewalks, centre line
@@ -609,10 +626,10 @@ function buildWorld() {
       m4.compose(new THREE.Vector3(x + (wrng() - 0.5) * 1.2, h + k * 1.2 - 0.4, z + (wrng() - 0.5) * 1.2), q, new THREE.Vector3(r, r * 0.9, r));
       crowns[ci].setMatrixAt(cn[ci]++, m4);
     }
-    if (x > BOUND.x0 && x < BOUND.x1 && z > BOUND.z0 && z < BOUND.z1) boxes.push({ x0: x - 0.3, x1: x + 0.3, z0: z - 0.3, z1: z + 0.3 });
+    if (x > BOUND.x0 && x < BOUND.x1 && z > BOUND.z0 && z < BOUND.z1) { boxes.push({ x0: x - 0.3, x1: x + 0.3, z0: z - 0.3, z1: z + 0.3 }); trees.push({ x, z }); }
     n++;
   }
-  trunks.count = n; trunks.castShadow = true; world.add(trunks);
+  trunks.count = n; trunks.castShadow = true; world.add(trunks); treeTrunks = trunks;
   crowns.forEach((c, i) => { c.count = cn[i]; c.castShadow = true; c.receiveShadow = true; world.add(c); });
 }
 buildWorld();
@@ -664,9 +681,104 @@ function poseHero(x, z) {
   const reach = c > 0.5 ? Math.sin(s.t * 9) * 0.25 : 0;
   h.arms[0].rotation.x = -sw * 0.8 * (1 - c) - 1.1 * c + reach; h.arms[1].rotation.x = sw * 0.8 * (1 - c) - 1.1 * c - reach;
   h.arms[0].rotation.z = -0.08; h.arms[1].rotation.z = 0.08;
+  if (s.chop) { const k = Math.sin(s.chop.p * Math.PI * 10); h.arms[0].rotation.x = h.arms[1].rotation.x = -1.7 + k * 0.9; h.torso.rotation.x = -0.1 - k * 0.15; }
 }
 const camRay = new THREE.Raycaster();
+const camTargets = aimTargets.concat(treeTrunks ? [treeTrunks] : []);
 const _v = new THREE.Vector3(), _o = new THREE.Vector3();
+
+// ---- Backpack: slots of {id, n}; materials stack ---------------------------------------------
+const capacity = () => tune.slots + state.extraSlots;
+const maxStack = id => ITEMS[id].material ? tune.stack_max : 1;
+function addItem(id) {
+  const inv = state.inv, st = inv.find(x => x.id === id && x.n < maxStack(id));
+  if (st) { st.n++; return true; }
+  if (inv.length >= capacity()) return false;
+  inv.push({ id, n: 1 }); return true;
+}
+const count = id => state.inv.reduce((t, x) => t + (x.id === id ? x.n : 0), 0);
+function removeItems(id, n) {
+  for (let i = state.inv.length - 1; i >= 0 && n > 0; i--) {
+    const x = state.inv[i]; if (x.id !== id) continue;
+    const k = Math.min(n, x.n); x.n -= k; n -= k; if (!x.n) state.inv.splice(i, 1);
+  }
+}
+
+// ---- Crafting ------------------------------------------------------------------------------
+const WHERE = { pano: 'armários, cômodas e caixas', fita: 'caixas e armários', fosforos: 'cômodas e armários', lenha: 'árvores fora da cidade', feijao: 'armários', sardinha: 'armários e geladeiras' };
+const RECIPES = [
+  { id: 'fogueira', name: 'Fogueira', needs: { lenha: 3, fosforos: 1 }, what: 'ilumina a noite e cozinha', make: () => placeFire() },
+  { id: 'curativo', name: 'Curativo improvisado', needs: { pano: 2 }, out: 'curativo', what: '+saúde' },
+  { id: 'mochila', name: 'Mochila reforçada', needs: { pano: 3, fita: 1 }, once: true, what: () => `+${tune.craft_extra_slots} espaços`, make: () => { state.extraSlots += tune.craft_extra_slots; } },
+  { id: 'feijao_quente', name: 'Feijão quente', needs: { feijao: 1 }, fire: true, out: 'feijao_quente', what: () => `enche ${tune.beans_cooked_food} de fome` },
+  { id: 'sardinha_assada', name: 'Sardinha assada', needs: { sardinha: 1 }, fire: true, out: 'sardinha_assada', what: 'sem risco de passar mal' },
+];
+// What stops a recipe right now, in words; empty when it can be made.
+function missing(r) {
+  const out = [];
+  if (r.once && state.extraSlots) return ['já feita'];
+  for (const id in r.needs) { const lack = r.needs[id] - count(id); if (lack > 0) out.push(`${lack} ${ITEMS[id].name.toLowerCase()}`); }
+  if (r.fire && !nearFire()) out.push('perto de uma fogueira acesa');
+  return out;
+}
+function craft(i) {
+  const r = RECIPES[i]; if (!r) return;
+  const m = missing(r);
+  if (m.length) { say(`${r.name}: falta ${m.join(', ')}.`); sfx.empty(); return; }
+  const before = JSON.stringify(state.inv);
+  for (const id in r.needs) removeItems(id, r.needs[id]);
+  if (r.out && !addItem(r.out)) { state.inv = JSON.parse(before); say('Mochila cheia: libere um espaço.'); sfx.empty(); return; }
+  if (r.make) r.make();
+  say('Fabricou: ' + r.name); sfx.craft(); events.push({ craft: r.id });
+}
+
+// ---- Fires ------------------------------------------------------------------------------------
+const fires = [];
+const FIREMAT = {
+  stone: new THREE.MeshStandardMaterial({ color: 0x5d5a55, roughness: 1, flatShading: true }),
+  log: new THREE.MeshStandardMaterial({ color: 0x4a3626, roughness: 1 }),
+  ash: new THREE.MeshStandardMaterial({ color: 0x1c1a18, roughness: 1 }),
+  flame: new THREE.MeshBasicMaterial({ color: 0xffa64a, transparent: true, opacity: 0.85, depthWrite: false }),
+  core: new THREE.MeshBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0.9, depthWrite: false }),
+};
+function placeFire() {
+  const s = state, x = s.x - Math.sin(s.yaw) * 1.3, z = s.z - Math.cos(s.yaw) * 1.3;
+  const g = new THREE.Group(); g.position.set(x, 0, z); world.add(g);
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, st = mesh(new THREE.DodecahedronGeometry(0.1, 0), FIREMAT.stone, Math.cos(a) * 0.38, 0.06, Math.sin(a) * 0.38, g); st.rotation.set(a, a * 2, 0); }
+  for (let i = 0; i < 3; i++) { const l = mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.6, 7), FIREMAT.log, 0, 0.12, 0, g); l.rotation.set(Math.PI / 2 - 0.35, i * 2.1, 0); }
+  const ash = mesh(new THREE.CircleGeometry(0.3, 12), FIREMAT.ash, 0, 0.02, 0, g, false); ash.rotation.x = -Math.PI / 2;
+  const flame = mesh(new THREE.ConeGeometry(0.2, 0.6, 8), FIREMAT.flame, 0, 0.42, 0, g, false);
+  const core = mesh(new THREE.ConeGeometry(0.1, 0.35, 6), FIREMAT.core, 0, 0.32, 0, g, false);
+  const light = new THREE.PointLight(0xff9a4a, tune.fire_light, 16, 1.6); light.position.y = 0.8; g.add(light);
+  const box = { x0: x - 0.4, x1: x + 0.4, z0: z - 0.4, z1: z + 0.4 }; boxes.push(box);
+  fires.push({ g, flame, core, light, box, x, z, lit: true, outAt: s.hour + tune.fire_hours });
+  sfx.fire();
+}
+function nearFire() { return fires.some(f => f.lit && Math.hypot(f.x - state.x, f.z - state.z) < tune.fire_reach); }
+function clearFires() {
+  for (const f of fires) { world.remove(f.g); const i = boxes.indexOf(f.box); if (i >= 0) boxes.splice(i, 1); }
+  fires.length = 0;
+}
+function flickerFires(t) {
+  for (const f of fires) {
+    if (!f.lit) continue;
+    const k = 0.82 + 0.1 * Math.sin(t * 13 + f.x) + 0.08 * Math.sin(t * 29 + f.z);
+    f.light.intensity = tune.fire_light * k; f.flame.scale.set(1, k * 1.1, 1); f.core.scale.set(1, 0.9 + 0.2 * Math.sin(t * 21), 1);
+  }
+}
+
+// ---- Trees for firewood -----------------------------------------------------------------------
+function aimTree() {
+  const s = state, fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw);
+  let best = null, bd = tune.chop_reach;
+  for (const t of trees) {
+    const dx = t.x - s.x, dz = t.z - s.z; if (Math.abs(dx) > bd || Math.abs(dz) > bd) continue;
+    const d = Math.hypot(dx, dz); if (d > bd) continue;
+    if (d > 0.01 && (dx * fx + dz * fz) / d < 0.3) continue;
+    best = t; bd = d;
+  }
+  return best;
+}
 
 // ---- Loot ------------------------------------------------------------------------------
 function rollLoot(type, chance = 1) {
@@ -692,10 +804,11 @@ function reset() {
     x: 0, z: 118, px: 0, pz: 118, yaw: 0, pitch: 0,
     hour: sh !== null ? Number(sh) : tune.start_hour, startHour: sh !== null ? Number(sh) : tune.start_hour,
     health: 100, hunger: tune.start_hunger, thirst: tune.start_thirst, sick: 0,
-    inv: ['agua', 'cereal'], flash: false, search: null, aim: null, msgs: [],
+    inv: [{ id: 'agua', n: 1 }, { id: 'cereal', n: 1 }], extraSlots: 0, craftOpen: false, chop: null, tree: null, flash: false, search: null, aim: null, msgs: [],
     walked: 0, bob: 0, heart: 0, face: 0, crouch: 0, speedNow: 0, searched: 0, eaten: 0, days: 0, dead: false,
   };
   for (const c of containers) { c.items = rollLoot(c.type); c.searched = false; c.refillAt = 0; }
+  clearFires();
   say('Você acordou na estrada. A cidade parece vazia.');
   say('Procure comida e água nas casas antes que acabem.');
 }
@@ -740,7 +853,7 @@ function placeCamera(alpha = 1) {
     cy * cp * tune.cam_distance - sy * tune.cam_shoulder);
   const want = _v.length(); _v.normalize();
   camRay.set(_o, _v); camRay.far = want + 0.25;
-  const hit = camRay.intersectObjects(aimTargets, false)[0];
+  const hit = camRay.intersectObjects(camTargets, false)[0];
   const d = hit ? Math.max(0.2, hit.distance - 0.25) : want;
   camera.position.copy(_o).addScaledVector(_v, d);
   if (camera.position.y < 0.25) camera.position.y = 0.25;
@@ -763,13 +876,15 @@ function collide(p) {
 }
 function take(c) {
   const before = c.items.length;
-  while (c.items.length && state.inv.length < tune.slots) { const id = c.items.shift(); state.inv.push(id); say('Pegou: ' + ITEMS[id].name); }
+  while (c.items.length && addItem(c.items[0])) { const id = c.items.shift(); say('Pegou: ' + ITEMS[id].name); }
   if (c.items.length) say(`Mochila cheia. Ficaram ${c.items.length} item(ns) na ${c.name}.`);
   if (before && before !== c.items.length) sfx.pick();
 }
 function useSlot(i) {
-  const id = state.inv[i]; if (!id) return;
-  state.inv.splice(i, 1); ITEMS[id].use(); state.eaten++;
+  const slot = state.inv[i]; if (!slot) return;
+  const id = slot.id;
+  if (ITEMS[id].material) { say(`${ITEMS[id].name}: material. Use na fabricação (${TOUCH ? 'FABRICAR' : 'C'}).`); return; }
+  removeItems(id, 1); ITEMS[id].use(); state.eaten++;
   say('Usou: ' + ITEMS[id].name); events.push({ use: id });
 }
 function lighting(h) {
@@ -804,7 +919,7 @@ const scenes = {
     draw() {
       ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#1c1e20'; ctx.fillRect(0, 0, W, H);
       const ids = Object.keys(ITEMS);
-      ids.forEach((id, i) => { const x = 140 + i * 160; slotBox(x - 36, 260, 72); icon(id, x, 296, 60); text(ITEMS[id].name, x, 360, 16, '#ddd'); });
+      ids.forEach((id, i) => { const x = 120 + (i % 7) * 170, y = 200 + Math.floor(i / 7) * 180; slotBox(x - 36, y, 72); icon(id, x, y + 36, 60); text(ITEMS[id].name, x, y + 100, 16, '#ddd'); });
       text('Itens', W / 2, 180, 28, '#fff');
     },
   },
@@ -879,7 +994,12 @@ const scenes = {
         }
       }
       // items
-      for (let i = 0; i < 9; i++) if (pressed('Digit' + (i + 1))) useSlot(i);
+      if (pressed('KeyC')) { s.craftOpen = !s.craftOpen; sfx.click(); }
+      for (let i = 0; i < 9; i++) if (pressed('Digit' + (i + 1))) { if (s.craftOpen) craft(i); else useSlot(i); }
+      for (const f of fires) if (f.lit && s.hour >= f.outAt) {
+        f.lit = false; f.light.intensity = 0; f.flame.visible = f.core.visible = false;
+        if (Math.hypot(f.x - s.x, f.z - s.z) < 25) say('A fogueira apagou.');
+      }
       if (pressed('KeyF')) { s.flash = !s.flash; sfx.click(); }
       // search
       placeCamera();
@@ -896,6 +1016,15 @@ const scenes = {
           }
         } else if (pressed('KeyE')) { if (c.items.length) take(c); else { say(`A ${c.name} está vazia.`); sfx.empty(); } }
       } else s.search = null;
+      // firewood: hold E at a tree when no furniture is in reach
+      const tr = c ? null : aimTree(); s.tree = tr;
+      if (tr && down.has('KeyE')) {
+        if (!s.chop || s.chop.t !== tr) s.chop = { t: tr, p: 0, n: 0 };
+        s.chop.p += dt / tune.chop_time;
+        if (s.chop.p * 5 > s.chop.n) { s.chop.n++; sfx.chop(); }
+        s.face = lerpAngle(s.face, Math.atan2(-(tr.x - s.x), -(tr.z - s.z)), Math.min(1, 10 * dt));
+        if (s.chop.p >= 1) { s.chop = null; if (addItem('lenha')) { say('Pegou: Lenha'); sfx.pick(); } else { say('Mochila cheia: sem espaço para a lenha.'); sfx.empty(); } }
+      } else s.chop = null;
       s.crouch += ((s.search ? 1 : 0) - s.crouch) * Math.min(1, 10 * dt);
       if (s.search) { const p = s.search.c.group.position; s.face = lerpAngle(s.face, Math.atan2(-(p.x - s.x), -(p.z - s.z)), Math.min(1, 10 * dt)); }
       for (const m of s.msgs) m.life -= dt;
@@ -907,6 +1036,7 @@ const scenes = {
       placeCamera(alpha);
       const day = lighting(state.hour % 24);
       flash.intensity = state.flash ? tune.flashlight_power : 0;
+      flickerFires(clock.now());
       renderer.render(world, camera);
       drawHud(day);
     },
@@ -974,6 +1104,36 @@ function icon(id, x, y, s) { // x,y centre; every item drawn
     ctx.rotate(-0.6); ctx.fillStyle = '#d2b08c'; rr(-18, -7, 36, 14, 6); ctx.fill();
     ctx.fillStyle = '#e9dccb'; ctx.fillRect(-6, -7, 12, 14);
     ctx.fillStyle = '#9c7a5a'; for (const dx of [-14, -10, 10, 14]) for (const dy of [-3, 3]) ctx.fillRect(dx - 0.7, dy - 0.7, 1.4, 1.4);
+  } else if (id === 'pano') {
+    ctx.fillStyle = '#8a6f5a'; ctx.beginPath(); ctx.moveTo(-16, -10); ctx.lineTo(14, -14); ctx.lineTo(16, 10); ctx.lineTo(-14, 14); ctx.fill();
+    ctx.strokeStyle = 'rgba(40,30,25,0.6)'; ctx.lineWidth = 1.2;
+    for (let i = -12; i <= 12; i += 6) { ctx.beginPath(); ctx.moveTo(i - 2, -12); ctx.lineTo(i + 1, 12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-14, i); ctx.lineTo(15, i - 2); ctx.stroke(); }
+    ctx.fillStyle = '#6f5848'; ctx.beginPath(); ctx.moveTo(14, -14); ctx.lineTo(16, 10); ctx.lineTo(6, 4); ctx.fill();
+  } else if (id === 'fita') {
+    ctx.fillStyle = '#9a9c96'; ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI * 2); ctx.arc(0, 0, 7, 0, Math.PI * 2, true); ctx.fill();
+    ctx.strokeStyle = '#6b6d68'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#b0b2ac'; ctx.fillRect(10, 8, 9, 10);
+  } else if (id === 'fosforos') {
+    ctx.fillStyle = '#a3402e'; rr(-15, -8, 30, 18, 2); ctx.fill(); ctx.fillStyle = '#d9cdb0'; ctx.fillRect(-10, -4, 20, 10);
+    ctx.fillStyle = '#3a2a1e'; ctx.fillRect(-15, 7, 30, 3);
+    ctx.fillStyle = '#d8b98a'; ctx.save(); ctx.rotate(-0.5); ctx.fillRect(-2, -24, 3, 18); ctx.fillStyle = '#b0302a'; ctx.fillRect(-3, -27, 5, 5); ctx.restore();
+  } else if (id === 'lenha') {
+    for (const [dy, rot] of [[6, 0.15], [-4, -0.2]]) {
+      ctx.save(); ctx.translate(0, dy); ctx.rotate(rot);
+      ctx.fillStyle = '#5c4330'; ctx.fillRect(-16, -5, 30, 10); ctx.fillStyle = '#c69b6d'; ctx.beginPath(); ctx.ellipse(14, 0, 3, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#3d2c1f'; ctx.beginPath(); ctx.moveTo(-14, -2); ctx.lineTo(8, -2); ctx.stroke(); ctx.restore();
+    }
+  } else if (id === 'feijao_quente') {
+    ctx.fillStyle = '#a0a3a5'; rr(-11, -9, 22, 24, 3); ctx.fill(); ctx.fillStyle = '#8a4b2a'; ctx.fillRect(-11, -1, 22, 10);
+    ctx.fillStyle = '#6a3a1e'; ctx.beginPath(); ctx.ellipse(0, -9, 11, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(230,225,215,0.8)'; ctx.lineWidth = 2;
+    for (const sx of [-5, 3]) { ctx.beginPath(); ctx.moveTo(sx, -13); ctx.quadraticCurveTo(sx + 5, -17, sx, -21); ctx.quadraticCurveTo(sx - 4, -24, sx + 2, -27); ctx.stroke(); }
+  } else if (id === 'sardinha_assada') {
+    ctx.strokeStyle = '#6b4b30'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(-18, 12); ctx.lineTo(18, -10); ctx.stroke();
+    ctx.save(); ctx.rotate(-0.55); ctx.fillStyle = '#8a5a2e'; ctx.beginPath(); ctx.moveTo(-12, 0); ctx.quadraticCurveTo(0, -8, 10, 0); ctx.quadraticCurveTo(0, 8, -12, 0); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(16, -5); ctx.lineTo(16, 5); ctx.fill();
+    ctx.strokeStyle = '#3a2412'; ctx.lineWidth = 1.2; for (const gx of [-5, 0, 5]) { ctx.beginPath(); ctx.moveTo(gx, -4); ctx.lineTo(gx + 2, 4); ctx.stroke(); }
+    ctx.restore();
   } else if (id === 'sardinha') {
     ctx.fillStyle = '#8f9497'; rr(-17, -10, 34, 20, 7); ctx.fill(); ctx.strokeStyle = '#5c6062'; ctx.stroke();
     ctx.fillStyle = '#4c6a7a'; ctx.beginPath(); ctx.moveTo(-10, 0); ctx.quadraticCurveTo(0, -7, 8, 0); ctx.quadraticCurveTo(0, 7, -10, 0); ctx.fill();
@@ -1015,19 +1175,29 @@ function drawHud(day) {
   if (s.sick > 0) st.push('Doente');
   if (st.length) shadowText(st.join('  ·  '), 28, TOUCH ? by + 126 : H - 142, 16, '#ffb0a0', 'left', '600');
   // backpack
-  const n = tune.slots, sz = TOUCH ? 66 : 58, gap = 8, x0 = W / 2 - (n * (sz + gap) - gap) / 2, y0 = H - sz - (TOUCH ? 16 : 22);
+  const n = capacity(), sz = TOUCH ? 66 : 58, gap = 8, x0 = W / 2 - (n * (sz + gap) - gap) / 2, y0 = H - sz - (TOUCH ? 16 : 22);
   shadowText(`Mochila  ${s.inv.length}/${n}`, W / 2, y0 - 14, 14, '#c9c3b5');
   for (let i = 0; i < n; i++) {
     const x = x0 + i * (sz + gap); slotBox(x, y0, sz);
     text(String(i + 1), x + 9, y0 + 10, 12, '#9c9688');
-    if (s.inv[i]) icon(s.inv[i], x + sz / 2, y0 + sz / 2 + 2, 42);
+    const it = s.inv[i];
+    if (it) { icon(it.id, x + sz / 2, y0 + sz / 2 + 2, 42); if (it.n > 1) shadowText('×' + it.n, x + sz - 6, y0 + sz - 10, 14, '#fff', 'right', '700'); }
   }
+  if (s.craftOpen) drawCraft();
   // aim prompt and search progress
   if (s.search) {
     const p = Math.min(1, s.search.p);
     shadowText(`Vasculhando ${s.search.c.name}…`, W / 2, H / 2 + 48, 20, '#fff');
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(W / 2 - 90, H / 2 + 66, 180, 8);
     ctx.fillStyle = '#e0d6bd'; ctx.fillRect(W / 2 - 90, H / 2 + 66, 180 * p, 8);
+  } else if (s.chop) {
+    shadowText('Cortando lenha…', W / 2, H / 2 + 48, 20, '#fff');
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(W / 2 - 90, H / 2 + 66, 180, 8);
+    ctx.fillStyle = '#c9a06a'; ctx.fillRect(W / 2 - 90, H / 2 + 66, 180 * Math.min(1, s.chop.p), 8);
+  } else if (s.tree && !s.aim) {
+    shadowText(TOUCH ? 'Segure VASCULHAR: cortar lenha' : 'Segure E: cortar lenha', W / 2, H / 2 + 48, 20, '#fff');
+  } else if (!s.aim && !s.craftOpen && nearFire()) {
+    shadowText(`Fogueira acesa  ·  ${TOUCH ? 'FABRICAR' : 'C'}: cozinhar`, W / 2, H / 2 + 48, 18, '#ffd9a8');
   } else if (s.aim) {
     const c = s.aim;
     const label = !c.searched ? (TOUCH ? `Segure VASCULHAR: ${c.name}` : `Segure E: vasculhar ${c.name}`) : c.items.length ? `E: pegar ${c.items.length} item(ns) da ${c.name}` : `${c.name[0].toUpperCase() + c.name.slice(1)} (vazia)`;
@@ -1038,6 +1208,54 @@ function drawHud(day) {
     ctx.globalAlpha = Math.min(1, m.life); shadowText(m.s, W - (TOUCH ? 160 : 28), 34 + i * 26, 17, '#e8e2d4', 'right'); ctx.globalAlpha = 1;
   });
   if (TOUCH) drawTouch();
+}
+
+// ---- Craft panel ---------------------------------------------------------------------------------
+function craftLayout() {
+  const pw = Math.min(620, W - 80), rh = TOUCH ? 50 : 54, ph = 64 + RECIPES.length * rh + 40;
+  return { pw, rh, ph, px: W / 2 - pw / 2, py: Math.max(12, (H - ph) / 2 - (TOUCH ? 30 : 20)) };
+}
+function craftRowAt(p) {
+  const L = craftLayout();
+  if (p.x < L.px || p.x > L.px + L.pw || p.y < L.py || p.y > L.py + L.ph) return -2; // outside: close
+  const i = Math.floor((p.y - L.py - 56) / L.rh);
+  return i >= 0 && i < RECIPES.length ? i : -1;
+}
+function drawCraft() {
+  const L = craftLayout();
+  ctx.fillStyle = 'rgba(14,13,12,0.86)'; ctx.fillRect(L.px, L.py, L.pw, L.ph);
+  ctx.strokeStyle = 'rgba(220,210,190,0.35)'; ctx.lineWidth = 1.5; ctx.strokeRect(L.px + 0.5, L.py + 0.5, L.pw - 1, L.ph - 1);
+  shadowText('Fabricação', L.px + 22, L.py + 28, 22, '#efe7d6', 'left', '600');
+  shadowText(TOUCH ? 'Toque numa receita · toque fora para fechar' : '1 a 5: fabricar  ·  C: fechar', L.px + L.pw - 20, L.py + 28, 14, '#a9a192', 'right');
+  RECIPES.forEach((r, i) => {
+    const y = L.py + 56 + i * L.rh, m = missing(r), ok = !m.length;
+    ctx.fillStyle = ok ? 'rgba(200,170,110,0.16)' : 'rgba(255,255,255,0.03)'; ctx.fillRect(L.px + 10, y + 3, L.pw - 20, L.rh - 6);
+    ctx.globalAlpha = ok ? 1 : 0.55;
+    text(String(i + 1), L.px + 28, y + L.rh / 2, 14, '#9c9688');
+    recipeIcon(r.id, L.px + 62, y + L.rh / 2, 34);
+    text(r.name, L.px + 92, y + L.rh / 2 - 9, 17, ok ? '#f3ead8' : '#cfc7b6', 'left', '600');
+    const need = Object.keys(r.needs).map(id => `${count(id)}/${r.needs[id]} ${ITEMS[id].name.toLowerCase()}`).join('  ·  ') + (r.fire ? '  ·  fogueira' : '');
+    text(need, L.px + 92, y + L.rh / 2 + 11, 13, '#b5ad9c', 'left');
+    const what = typeof r.what === 'function' ? r.what() : r.what;
+    text(ok ? what : 'falta: ' + m.join(', '), L.px + L.pw - 22, y + L.rh / 2, 13, ok ? '#d8c79e' : '#d79a8a', 'right');
+    ctx.globalAlpha = 1;
+  });
+  text('Pano, fita e fósforos: armários, cômodas e caixas  ·  Lenha: árvores fora da cidade', W / 2, L.py + L.ph - 18, 13, '#8f887b');
+}
+function recipeIcon(id, x, y, s) {
+  if (id === 'fogueira') {
+    const u = s / 40; ctx.save(); ctx.translate(x, y); ctx.scale(u, u);
+    ctx.fillStyle = '#5a3f2a'; ctx.save(); ctx.rotate(0.35); ctx.fillRect(-16, 8, 32, 6); ctx.restore(); ctx.save(); ctx.rotate(-0.35); ctx.fillRect(-16, 8, 32, 6); ctx.restore();
+    ctx.fillStyle = '#e07a2e'; ctx.beginPath(); ctx.moveTo(0, -18); ctx.quadraticCurveTo(14, -2, 8, 10); ctx.lineTo(-8, 10); ctx.quadraticCurveTo(-14, -2, 0, -18); ctx.fill();
+    ctx.fillStyle = '#ffd27a'; ctx.beginPath(); ctx.moveTo(0, -6); ctx.quadraticCurveTo(7, 3, 4, 10); ctx.lineTo(-4, 10); ctx.quadraticCurveTo(-7, 3, 0, -6); ctx.fill();
+    ctx.restore();
+  } else if (id === 'mochila') {
+    const u = s / 40; ctx.save(); ctx.translate(x, y); ctx.scale(u, u);
+    ctx.fillStyle = '#6b5638'; rr(-13, -14, 26, 30, 6); ctx.fill(); ctx.fillStyle = '#56442c'; ctx.fillRect(-10, 2, 20, 10);
+    ctx.strokeStyle = '#3b3023'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, -14, 7, Math.PI, 0); ctx.stroke();
+    ctx.fillStyle = '#c9c3b5'; ctx.fillRect(9, -18, 10, 3); ctx.fillRect(12.5, -21.5, 3, 10);
+    ctx.restore();
+  } else icon(id, x, y, s);
 }
 
 // ---- Loop --------------------------------------------------------------------------------
@@ -1063,7 +1281,7 @@ window.game = {
   press(code) { hit.add(code); },
   hold(code, on) { on ? down.add(code) : down.delete(code); },
   get events() { return events; },
-  houses, containers,
+  houses, containers, trees, fires, RECIPES,
   get size() { return [W, H]; },
   get buttons() { return BTN; },
   step(n = 1, draw = true, alpha = 1) {
