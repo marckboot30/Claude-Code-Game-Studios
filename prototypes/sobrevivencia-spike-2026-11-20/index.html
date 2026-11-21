@@ -297,6 +297,17 @@ function startAudio() {
     const g = ac.createGain(); g.gain.value = 0.05;
     src.connect(lp).connect(g).connect(out); src.start();
     audio.wind = { g, lp };
+    // engine: two detuned saws through a low-pass, silent until you drive
+    const eg = ac.createGain(); eg.gain.value = 0; const elp = ac.createBiquadFilter(); elp.type = 'lowpass'; elp.frequency.value = 500;
+    const e1 = ac.createOscillator(), e2 = ac.createOscillator(); e1.type = 'sawtooth'; e2.type = 'sawtooth'; e1.frequency.value = 45; e2.frequency.value = 90.7;
+    e1.connect(elp); e2.connect(elp); elp.connect(eg).connect(out); e1.start(); e2.start(); audio.engine = { g: eg, lp: elp, e1, e2 };
+    // tyres: band-passed noise, up when the wheels slide
+    const ts = ac.createBufferSource(); ts.buffer = buf; ts.loop = true; const tbp = ac.createBiquadFilter(); tbp.type = 'bandpass'; tbp.frequency.value = 2300; tbp.Q.value = 6;
+    const tg = ac.createGain(); tg.gain.value = 0; ts.connect(tbp).connect(tg).connect(out); ts.start(); audio.tyre = tg;
+    // crickets: a high tone pulsing in bursts, up at night
+    const cr = ac.createOscillator(); cr.frequency.value = 4400; const am = ac.createGain(); am.gain.value = 0;
+    const lfo = ac.createOscillator(); lfo.type = 'square'; lfo.frequency.value = 28; const lfoG = ac.createGain(); lfoG.gain.value = 0.5; lfo.connect(lfoG).connect(am.gain);
+    const cg = ac.createGain(); cg.gain.value = 0; cr.connect(am).connect(cg).connect(out); cr.start(); lfo.start(); audio.crickets = cg;
   }
   if (audio.ac.state === 'suspended') audio.ac.resume();
 }
@@ -352,7 +363,14 @@ const sfx = {
   ping: () => { tone(1300, 0.18, 'triangle', 0.1, -200); noise(0.05, 3000, 0.15, 2); },
   thudSoft: () => noise(0.07, 600, 0.15, 1),
   thud: () => { noise(0.2, 120, 0.4, 0.8); tone(70, 0.2, 'sine', 0.3, -30); },
-  door: () => { noise(0.25, 500, 0.12, 2); tone(180, 0.12, 'triangle', 0.06, -40); },
+  door: () => { tone(190, 0.45, 'sawtooth', 0.025, 170); noise(0.4, 900, 0.05, 8); noise(0.08, 300, 0.15, 1, 0.42); }, // creak, then the latch
+  crash: k => { noise(0.4, 260, 0.5 * k, 0.6); noise(0.25, 2600, 0.25 * k, 1); tone(55, 0.35, 'sine', 0.4 * k, -20); },
+  hurt: () => { tone(220, 0.18, 'sawtooth', 0.06, -90); noise(0.12, 500, 0.12, 1); },
+  chirp: () => { const b = 2800 + (seed & 1023); for (let i = 0; i < 3 + (seed & 3); i++) tone(b + i * 90, 0.05, 'sine', 0.025, 900, ); },
+  owl: () => { tone(390, 0.32, 'sine', 0.05, -25); setTimeout(() => tone(350, 0.45, 'sine', 0.05, -30), 420); },
+  crackle: () => noise(0.03, 2600 + (seed & 2047), 0.12, 3),
+  bleat: () => tone(620, 0.4, 'sine', 0.05, -260),
+  grunt: () => { tone(95, 0.22, 'sawtooth', 0.06, -20); noise(0.18, 220, 0.08, 2); },
   chop: () => { noise(0.09, 180, 0.35, 1.2); tone(110, 0.08, 'triangle', 0.15, -40); },
   craft: () => { noise(0.15, 1200, 0.12, 1.5); tone(440, 0.12, 'triangle', 0.1); tone(660, 0.18, 'triangle', 0.08); },
   fire: () => { for (let i = 0; i < 6; i++) noise(0.05, 2500, 0.1, 3, i * 0.07); noise(0.6, 400, 0.12, 0.7, 0.3); },
@@ -721,6 +739,7 @@ function car(x, z, rot, mi) {
     axleLocal: new CANNON.Vec3(-1, 0, 0), maxSuspensionTravel: 0.3, customSlidingRotationalSpeed: -30, useCustomSlidingRotationalSpeed: true,
   };
   for (const [wx, wz] of [[-0.85, 1.35], [0.85, 1.35], [-0.85, -1.35], [0.85, -1.35]]) { wopt.chassisConnectionPointLocal = new CANNON.Vec3(wx, -0.15, wz); vehicle.addWheel(wopt); }
+  chassis.addEventListener('collide', ev => { const v = Math.abs(ev.contact.getImpactVelocityAlongNormal()); if (v > 3 && state && Math.hypot(chassis.position.x - state.x, chassis.position.z - state.z) < 40) { sfx.crash(Math.min(1, v / 12)); if (state.driving && state.driving.chassis === chassis && v > 9) { state.health -= (v - 9) * 3; say('Batida forte!'); } } });
   vehicle.addToWorld(phys); // taken out of the world again when far from the player (updateChunks)
   // the look: body, cabin, glass, bumpers, lights; wheels are separate and follow the physics
   const g = new THREE.Group(); world.add(g); freeObjs.add(g);
@@ -1535,7 +1554,18 @@ function enterCar(c) {
   say(c.fuel > 0 ? `No carro. Combustível: ${Math.round(c.fuel)}%` : 'No carro, mas o tanque está vazio. Ache um galão ou um posto.');
   sfx.door();
 }
+function engineSound(c, throttle, sp) {
+  if (!audio || !audio.engine) return;
+  const E = audio.engine, t = audio.ac.currentTime, on = c && c.fuel > 0 ? 1 : 0;
+  const f = 38 + Math.abs(sp) * 3.4 + throttle * 18; // revs rise with speed and throttle
+  E.e1.frequency.setTargetAtTime(f, t, 0.08); E.e2.frequency.setTargetAtTime(f * 2.01, t, 0.08);
+  E.lp.frequency.setTargetAtTime(300 + throttle * 900 + Math.abs(sp) * 20, t, 0.1);
+  E.g.gain.setTargetAtTime(c ? (0.05 + throttle * 0.06) * on : 0, t, 0.15);
+  let slip = 0; if (c) for (const w of c.vehicle.wheelInfos) if (w.isInContact) slip = Math.max(slip, 1 - w.skidInfo);
+  audio.tyre.gain.setTargetAtTime(c && Math.abs(sp) > 3 ? Math.max(0, slip - 0.25) * 0.25 : 0, t, 0.05);
+}
 function leaveCar() {
+  engineSound(null, 0, 0);
   const s = state, c = s.driving; if (!c) return;
   const q = c.chassis.quaternion, right = q.vmult(new CANNON.Vec3(1, 0, 0)), p = c.chassis.position;
   playerBody.position.set(p.x + right.x * 1.9, 0.05, p.z + right.z * 1.9); playerBody.velocity.setZero();
@@ -1562,7 +1592,7 @@ function driveCar(c, f, st, dt) {
   // the camera swings back behind the car unless you are looking around
   state.lookT += dt;
   if (state.lookT > 1.2 && Math.abs(sp) > 2) state.yaw = lerpAngle(state.yaw, carYaw(c) + (sp < -1 ? Math.PI : 0), Math.min(1, 2.5 * dt));
-  if (audio && !muted && Math.abs(engine) > 0 && Math.floor(state.t * 60) % 12 === 0) tone(60 + Math.abs(sp) * 4, 0.2, 'sawtooth', 0.04);
+  engineSound(c, Math.abs(engine) / tune.engine_force, sp);
 }
 const CAR_DIR = -1; // engine force sign that drives the car forward
 function nearestProp() {
@@ -1810,7 +1840,7 @@ function stepAnimals(dt) {
     else if (a.mode === 'flee') { speed = d.run; if (a.t <= 0) { a.mode = 'idle'; a.t = 2; } }
     else if (a.mode === 'charge') {
       speed = d.run; a.tx = s.x; a.tz = s.z;
-      if (pd < 1.5 && a.cool <= 0 && !s.driving) { s.health -= d.damage; a.cool = 1.3; say(`O javali te atacou! -${d.damage}`); sfx.thud(); sfx.animalHurt('javali'); }
+      if (pd < 1.5 && a.cool <= 0 && !s.driving) { s.health -= d.damage; a.cool = 1.3; say(`O javali te atacou! -${d.damage}`); sfx.thud(); sfx.hurt(); sfx.animalHurt('javali'); }
       if (a.t <= 0 || pd > 45) { a.mode = 'flee'; a.t = 4; }
     }
     if (speed > 0) {
@@ -2147,6 +2177,21 @@ function renderScene(day) {
   if (composer) composer.render(); else renderer.render(world, camera);
 }
 
+let ambDay = 1, treeCover = 0;
+function stepAmbience(dt) {
+  if (!audio) return;
+  const s = state, t = audio.ac.currentTime, step = Math.floor(s.t * 60);
+  if (step % 60 === 0) { let n = 0; for (const tr of trees) if (Math.abs(tr.x - s.x) < 18 && Math.abs(tr.z - s.z) < 18) n++; treeCover = Math.min(1, n / 25); }
+  const gust = 0.5 + 0.5 * Math.sin(s.t * 0.21) * Math.sin(s.t * 0.067 + 1.3);
+  audio.wind.g.gain.setTargetAtTime((0.03 + 0.05 * (1 - ambDay) + 0.05 * gust * (0.4 + treeCover)) * (s.swim ? 0.5 : 1), t, 0.3);
+  audio.wind.lp.frequency.setTargetAtTime(300 + 500 * gust * (0.5 + treeCover), t, 0.3);
+  audio.crickets.gain.setTargetAtTime(s.driving ? 0 : 0.012 * Math.max(0, 1 - ambDay * 2), t, 0.5);
+  const r = vr(step * 0.731 + s.x); // a cheap, steady pseudo-random for when sounds happen
+  if (ambDay > 0.5 && !s.driving && r < 0.006 * (0.3 + treeCover)) sfx.chirp();
+  if (ambDay < 0.3 && r > 0.9993) sfx.owl();
+  if (nearFire() && r < 0.12) sfx.crackle();
+  if (step % 90 === 0) for (const a of animals) { if (a.dead) continue; const d = Math.hypot(a.x - s.x, a.z - s.z); if (d < 35 && vr(a.x + step) < 0.15) a.kind === 'javali' ? sfx.grunt() : a.kind === 'cervo' ? sfx.bleat() : 0; }
+}
 function lighting(h) {
   const a = (h - 6) / 12 * Math.PI, el = Math.sin(a);
   const sm = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
@@ -2173,7 +2218,7 @@ function lighting(h) {
   world.environmentIntensity = CHEAP ? 0 : 0.15 + 0.55 * day;
   hemi.intensity = (CHEAP ? 0.16 + 0.8 * day : 0.14 + 0.4 * day); hemi.color.setRGB(0.6 + 0.17 * day, 0.65 + 0.14 * day, 0.8);
   renderer.toneMappingExposure = 0.9 + 0.2 * day;
-  if (audio && audio.wind) audio.wind.g.gain.value = 0.04 + 0.05 * (1 - day);
+  ambDay = day;
   return day;
 }
 function clockStr() {
@@ -2246,7 +2291,7 @@ const scenes = {
         if (onGround) { pb.velocity.x = vx; pb.velocity.z = vz; }
         else { const k = Math.min(1, 2 * dt); pb.velocity.x += (vx - pb.velocity.x) * k; pb.velocity.z += (vz - pb.velocity.z) * k; }
         if (onGround && s.airVy < -tune.fall_safe_speed) { // a hard landing hurts
-          const hurt = (-s.airVy - tune.fall_safe_speed) * tune.fall_damage; s.health -= hurt; say(`Queda feia: -${Math.round(hurt)} de saúde.`); sfx.thud();
+          const hurt = (-s.airVy - tune.fall_safe_speed) * tune.fall_damage; s.health -= hurt; say(`Queda feia: -${Math.round(hurt)} de saúde.`); sfx.thud(); sfx.hurt();
         }
         s.airVy = onGround ? 0 : Math.min(s.airVy, pb.velocity.y); s.air = !onGround;
         s.swim = inWater(pb.position.x, pb.position.z);
@@ -2278,7 +2323,7 @@ const scenes = {
       if (!dmg && s.hunger > tune.regen_threshold && s.thirst > tune.regen_threshold) s.health = Math.min(100, s.health + tune.regen_rate / 60 * dt);
       if (s.health < 30) { s.heart -= dt; if (s.heart <= 0) { s.heart = 0.5 + s.health / 30; sfx.heart(); } }
       if (s.health <= 0) {
-        s.health = 0; s.dead = true; s.gained = 'Você sobreviveu ' + survived(); saveBest(); scene = 'over';
+        engineSound(null, 0, 0); s.health = 0; s.dead = true; s.gained = 'Você sobreviveu ' + survived(); saveBest(); scene = 'over';
         if (document.exitPointerLock) document.exitPointerLock(); events.push({ dead: true }); return;
       }
       // refill searched furniture over the days
@@ -2296,7 +2341,7 @@ const scenes = {
         if (Math.hypot(f.x - s.x, f.z - s.z) < 25) say('A fogueira apagou.');
       }
       if (pressed('KeyF')) { s.flash = !s.flash; sfx.click(); }
-      stepGuns(dt); stepParticles(dt); stepAnimals(dt); stepLogs(dt); if (s.pickAnim > 0) s.pickAnim -= dt;
+      stepGuns(dt); stepParticles(dt); stepAnimals(dt); stepLogs(dt); stepAmbience(dt); if (s.pickAnim > 0) s.pickAnim -= dt;
       if (!s.driving && s.speedNow > 4.5 && Math.floor(s.t * 60) % 20 === 0) makeNoise(s.x, s.z, 22);
       // search
       placeCamera();
