@@ -1,0 +1,26 @@
+{
+  "apps": [{
+    "name": "sobrevivencia",
+    "displayName": "Sobrevivência",
+    "subtitle": "Sobreviva, cace e enfrente outros jogadores",
+    "description": "Um mundo aberto sem fim depois do colapso. Vasculhe casas atrás de comida, água e munição, corte lenha, acenda fogueiras, cace cervos e javalis, dirija carros abandonados e nade nos lagos.\n\n**Online, todos contra todos:** até 8 jogadores na mesma sala, com voz por proximidade. Quem morre deixa a mochila para trás.\n\nArmas: pistola (25), escopeta (12), sniper com luneta (6) e fuzil (30).",
+    "controls": "WASD anda, mouse olha, Shift corre, Espaço pula, E vasculha/entra/abre, G pega e joga, C fabrica, botão direito mira, esquerdo atira, R recarrega, Q troca de arma. No celular, joystick e botões na tela.",
+    "file": "index.html",
+    "version": "1.0.0",
+    "visibility": "PRIVATE",
+    "authMode": "OPTIONAL",
+    "license": "CLOSED",
+    "emoji": "🪓",
+    "color": "#8a3226",
+    "tags": ["game-genre/action", "game-subgenre/survival", "game-subgenre/open-world", "game-play-mode/online-multiplayer", "game-play-mode/single-player", "game-feel/tense"],
+    "design": { "genre": "game-subgenre/survival", "coreGameplay": "core-gameplay/survive", "perspective": "perspective/3d-third-person", "visualStyle": "visual-style/low-poly", "feel": "game-feel/tense" },
+    "types": ["solo", "online", "party"],
+    "party": { "online": [2, 3, 4] },
+    "roomVoice": true,
+    "controller": { "support": "off" },
+    "surfaceTargets": { "desktop": true, "mobileLandscape": true, "mobilePortrait": false },
+    "primarySurface": "DESKTOP",
+    "listing": { "icon": "listing/icon.png", "heroLandscape": "listing/hero-landscape.png" },
+    "server": { "entry": "server/index.mjs", "rooms": ["game"] }
+  }]
+}

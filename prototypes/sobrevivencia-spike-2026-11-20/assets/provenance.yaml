@@ -23,3 +23,13 @@
   tool: "esbuild 0.24.0, one plain script (global CANNON) for play from a file"
   date: 2026-11-21
   ships: true
+- path: listing/icon.png
+  origin: code
+  tool: "screenshot of the game, rendered with Playwright"
+  date: 2026-11-21
+  ships: true
+- path: listing/hero-landscape.png
+  origin: code
+  tool: "screenshot of the game, rendered with Playwright"
+  date: 2026-11-21
+  ships: true
