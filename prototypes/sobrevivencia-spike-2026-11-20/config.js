@@ -48,11 +48,13 @@ window.CONFIG = {
   run_speed: { value: 5.6, min: 2, max: 12, step: 0.1 },      // m/s com Shift
   turn_speed: { value: 2.2, min: 0.5, max: 5, step: 0.1 },    // rad/s nas setas
   mouse_sens: { value: 0.0022, min: 0.0005, max: 0.006, step: 0.0001 },
+  touch_look_sens: { value: 0.0045, min: 0.001, max: 0.012, step: 0.0005 }, // rad por pixel arrastado no celular
   player_radius: { value: 0.35, min: 0.2, max: 0.6, step: 0.05 }, // m
 
   // --- Mundo ---
   flashlight_power: { value: 60, min: 5, max: 150, step: 5 },
   fog_day_far: { value: 150, min: 40, max: 250, step: 5 },    // m de visibilidade de dia
+  mobile_resolution: { value: 0.85, min: 0.4, max: 1, step: 0.05 }, // resolução no celular (1 = nativa)
   fog_night_far: { value: 50, min: 15, max: 150, step: 5 },   // m à noite
 
   volume: { value: 0.5, min: 0, max: 1, step: 0.05 },
