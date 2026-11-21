@@ -82,6 +82,7 @@ window.CONFIG = {
     armario: { min: 0, max: 2, items: [['feijao', 3], ['cereal', 3], ['sardinha', 2], ['agua', 1], ['pano', 2], ['fita', 1], ['fosforos', 1]] },
     caixa: { min: 0, max: 2, items: [['cereal', 2], ['agua', 2], ['curativo', 1], ['feijao', 1], ['fita', 2], ['pano', 2], ['fosforos', 1]] },
     comoda: { min: 0, max: 2, items: [['curativo', 2], ['cereal', 2], ['maca', 1], ['pano', 3], ['fosforos', 2]] },
+    pilha: { min: 2, max: 4, items: [['lenha', 1]] },
     prateleira: { min: 0, max: 3, items: [['feijao', 3], ['cereal', 2], ['agua', 3], ['refri', 2], ['sardinha', 2], ['fosforos', 1], ['fita', 1]] },
   },
 };
