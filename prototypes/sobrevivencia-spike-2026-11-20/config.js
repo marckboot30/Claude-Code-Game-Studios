@@ -82,6 +82,12 @@ window.CONFIG = {
   ammo_chance: { value: 0.3, min: 0, max: 1, step: 0.05 },      // chance de um armário ter munição
   gun_find_mult: { value: 1, min: 0, max: 5, step: 0.1 },       // multiplica a chance de achar armas
   max_decals: { value: 80, min: 10, max: 300, step: 10 },       // marcas de tiro no mundo
+  recoil_mult: { value: 1, min: 0, max: 3, step: 0.1 },         // força do coice (a mira volta sozinha)
+  shake_mult: { value: 1, min: 0, max: 3, step: 0.1 },          // tremor da câmera ao atirar
+  hip_spread: { value: 0.75, min: 0.1, max: 2, step: 0.05 },    // abertura sem mirar (multiplica a da arma)
+  aim_spread: { value: 0.22, min: 0, max: 1, step: 0.02 },      // abertura mirando
+  aim_assist: { value: 1.2, min: 0, max: 6, step: 0.1 },        // graus: o tiro puxa para um animal tão perto da mira (computador)
+  aim_assist_touch: { value: 3, min: 0, max: 8, step: 0.1 },    // o mesmo no celular
 
   // --- Animais ---
   animals: { value: 10, min: 0, max: 40, step: 1 },             // vivos em volta (computador)
@@ -127,10 +133,10 @@ window.CONFIG = {
   // chumbos por tiro, força do impacto, coice (rad), raio do barulho (m), chance de achar por móvel,
   // balas por achado [mín, máx]; auto = segura o gatilho; zoom = campo de visão com luneta.
   guns: {
-    pistola: { mag: 25, damage: 28, rate: 0.22, spread: 0.018, range: 70, reload: 1.4, pellets: 1, force: 3, recoil: 0.025, noise: 120, find: 0.035, ammo_find: [8, 20] },
-    escopeta: { mag: 12, damage: 14, rate: 0.85, spread: 0.07, range: 30, reload: 2.6, pellets: 8, force: 2, recoil: 0.09, noise: 160, find: 0.02, ammo_find: [4, 10] },
-    sniper: { mag: 6, damage: 140, rate: 1.4, spread: 0.002, range: 400, reload: 2.8, pellets: 1, force: 8, recoil: 0.12, noise: 300, find: 0.008, ammo_find: [3, 8], zoom: 14 },
-    fuzil: { mag: 30, damage: 32, rate: 0.1, spread: 0.022, range: 150, reload: 2.2, pellets: 1, force: 4, recoil: 0.03, noise: 200, find: 0.012, ammo_find: [10, 30], auto: true },
+    pistola: { mag: 25, damage: 28, rate: 0.22, spread: 0.018, range: 70, reload: 1.4, pellets: 1, force: 6, recoil: 0.04, speed: 380, shake: 0.35, noise: 120, find: 0.035, ammo_find: [8, 20] },
+    escopeta: { mag: 12, damage: 14, rate: 0.85, spread: 0.07, range: 30, reload: 2.6, pellets: 8, force: 4, recoil: 0.144, speed: 400, shake: 0.9, noise: 160, find: 0.02, ammo_find: [4, 10] },
+    sniper: { mag: 6, damage: 140, rate: 1.4, spread: 0.002, range: 400, reload: 2.8, pellets: 1, force: 16, recoil: 0.192, speed: 850, shake: 1.0, noise: 300, find: 0.008, ammo_find: [3, 8], zoom: 14 },
+    fuzil: { mag: 30, damage: 32, rate: 0.1, spread: 0.022, range: 150, reload: 2.2, pellets: 1, force: 8, recoil: 0.048, speed: 720, shake: 0.3, noise: 200, find: 0.012, ammo_find: [10, 30], auto: true },
   },
 
   // Tabelas de saque por tipo de móvel: [item, peso], e quantos itens (mín..máx).

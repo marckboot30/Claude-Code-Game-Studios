@@ -287,10 +287,15 @@ function startAudio() {
   if (!audio) {
     const ac = window.GAME_AUDIO || new (window.AudioContext || window.webkitAudioContext)();
     const out = ac.createGain(); out.gain.value = muted ? 0 : tune.volume;
-    out.connect(ac.destination);
+    // a limiter lets gunshots be loud without clipping; a reverb gives them a tail across the land
+    const lim = ac.createDynamicsCompressor(); lim.threshold.value = -10; lim.knee.value = 6; lim.ratio.value = 12; lim.attack.value = 0.002; lim.release.value = 0.2;
+    out.connect(lim).connect(ac.destination);
+    const irLen = Math.floor(ac.sampleRate * 2.6), ir = ac.createBuffer(2, irLen, ac.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < irLen; i++) { const k = i / irLen; d[i] = (vr(i * 1.37 + ch * 99) * 2 - 1) * Math.pow(1 - k, 3.2) * (k < 0.01 ? k * 100 : 1); } }
+    const verb = ac.createConvolver(); verb.buffer = ir; const verbIn = ac.createGain(); verbIn.gain.value = 0.55; verbIn.connect(verb).connect(out);
     const len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = vr(i * 0.37) * 2 - 1;
-    audio = { ac, out, noise: buf };
+    audio = { ac, out, noise: buf, verb: verbIn };
     // Wind: looping filtered noise, louder at night.
     const src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
     const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
@@ -321,6 +326,21 @@ function tone(freq, dur, type = 'sine', vol = 0.2, slide = 0) {
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.connect(g).connect(audio.out); o.start(t); o.stop(t + dur);
 }
+function shot(dur, freq, vol, type = 'bandpass', q = 0.7, delay = 0, send = 0.4, attack = 0.002) {
+  if (!audio || muted) return;
+  const t = audio.ac.currentTime + delay, s = audio.ac.createBufferSource(), f = audio.ac.createBiquadFilter(), g = audio.ac.createGain();
+  s.buffer = audio.noise; f.type = type; f.frequency.value = freq; f.Q.value = q;
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  s.connect(f).connect(g); g.connect(audio.out); if (send) { const sg = audio.ac.createGain(); sg.gain.value = send; g.connect(sg).connect(audio.verb); }
+  s.start(t, (t * 3.1) % 1.5); s.stop(t + dur + 0.05);
+}
+function boom(f0, f1, dur, vol, delay = 0) {
+  if (!audio || muted) return;
+  const t = audio.ac.currentTime + delay, o = audio.ac.createOscillator(), g = audio.ac.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(audio.out); const sg = audio.ac.createGain(); sg.gain.value = 0.3; g.connect(sg).connect(audio.verb); o.start(t); o.stop(t + dur + 0.05);
+}
 function noise(dur, freq, vol = 0.2, q = 1, delay = 0) {
   if (!audio || muted) return;
   const t = audio.ac.currentTime + delay, s = audio.ac.createBufferSource(), f = audio.ac.createBiquadFilter(), g = audio.ac.createGain();
@@ -348,11 +368,24 @@ const sfx = {
   sick: () => tone(140, 0.6, 'sawtooth', 0.05, -60),
   heart: () => { tone(55, 0.12, 'sine', 0.35); setTimeout(() => tone(50, 0.12, 'sine', 0.25), 160); }, // sound only, not game logic
   click: () => tone(1200, 0.03, 'square', 0.05),
+  // a gunshot in layers: the supersonic crack, the blast, the low boom in the chest, the gun's own
+  // mechanism, then the echo rolling back from the land (the reverb) and a late slap off far trees
   gun: id => {
-    const G = { pistola: [0.18, 1400, 0.55, 90], escopeta: [0.35, 700, 0.8, 60], sniper: [0.5, 1100, 0.9, 50], fuzil: [0.16, 1600, 0.5, 80] }[id];
-    noise(G[0], G[1], G[2], 0.6); tone(G[3], G[0] * 1.2, 'sine', 0.6, -30); noise(G[0] * 3, 400, G[2] * 0.25, 0.5, 0.12); noise(G[0] * 4, 250, G[2] * 0.12, 0.5, 0.35); // crack, thump, echoes
+    const P = {
+      pistola: { crack: 0.9, body: 1.0, low: [110, 45, 0.25, 0.9], len: 0.16, mech: () => { noise(0.03, 3200, 0.18, 4, 0.06); } },
+      escopeta: { crack: 0.8, body: 1.3, low: [80, 32, 0.45, 1.2], len: 0.3, mech: () => { noise(0.08, 1400, 0.22, 3, 0.42); noise(0.07, 900, 0.22, 3, 0.55); tone(320, 0.04, 'square', 0.05, 0, ); } },
+      sniper: { crack: 1.2, body: 1.4, low: [70, 28, 0.6, 1.3], len: 0.35, mech: () => { noise(0.06, 2400, 0.18, 4, 0.7); noise(0.08, 1600, 0.2, 4, 0.9); } },
+      fuzil: { crack: 0.85, body: 1.05, low: [95, 40, 0.28, 0.95], len: 0.14, mech: () => noise(0.025, 3600, 0.12, 5, 0.04) },
+    }[id];
+    shot(0.035, 4500, P.crack, 'highpass', 0.7, 0, 0.6, 0.0008);           // crack
+    shot(P.len, 1300, P.body, 'lowpass', 0.8, 0.002, 0.7);                // blast
+    shot(P.len * 2.2, 500, P.body * 0.45, 'lowpass', 0.7, 0.01, 0.9);      // body of the blast
+    boom(P.low[0], P.low[1], P.low[2], P.low[3]);                          // the thump
+    shot(0.5, 700, P.body * 0.16, 'bandpass', 0.6, 0.28 + P.len, 1.0);     // slap back from the treeline
+    P.mech();
   },
   dry: () => tone(2400, 0.03, 'square', 0.08),
+  hitFlesh: () => { noise(0.08, 400, 0.25, 1.5); tone(180, 0.06, 'sine', 0.15, -60); },
   animalHurt: k => k === 'javali' ? (tone(140, 0.3, 'sawtooth', 0.12, -60), noise(0.25, 300, 0.2, 2)) : k === 'cervo' ? tone(700, 0.35, 'sine', 0.1, -300) : tone(1500, 0.15, 'sine', 0.08, 600),
   animalAlarm: (k, d) => { const v = Math.max(0.02, 0.12 * (1 - d / 60)); if (k === 'cervo') tone(900, 0.2, 'sine', v, -400); else if (k === 'javali') { tone(110, 0.25, 'sawtooth', v, 20); noise(0.2, 250, v * 1.5, 2); } else noise(0.08, 3000, v * 0.6, 2); },
   reloadStart: () => { noise(0.06, 2000, 0.15, 3); noise(0.05, 1500, 0.12, 3, 0.25); },
@@ -1419,7 +1452,7 @@ function poseHero(x, z) {
   for (const id in gunMeshes) gunMeshes[id].visible = id === s.gun && !s.chop && !s.search;
   if (s.gun && !s.driving && !s.chop && !s.search && !(s.pickAnim > 0) && sk < 0.5) {
     const up = s.pitch * 0.9, rl = s.reload ? 0.5 : 0, long = s.gun !== 'pistola';
-    h.arms[1].rotation.set(Math.PI / 2 + up - rl + (s.kick || 0) * 0.15, 0, 0.05);
+    h.arms[1].rotation.set(Math.PI / 2 + up - rl + (s.kick || 0) * 0.35, 0, 0.05);
     h.arms[0].rotation.set(Math.PI / 2 + up - (long ? 0.1 : 0) - rl * 1.5, 0, long ? 0.6 : 0.35);
     h.torso.rotation.y = long ? 0.35 : 0.1;
   } else h.torso.rotation.y = 0;
@@ -1702,19 +1735,29 @@ function shotTargets() {
   for (const c of cars) if (Math.hypot(c.chassis.position.x - s.x, c.chassis.position.z - s.z) < 150) out.push(c.g);
   return out;
 }
+let bulletSpeed = 600;
 function fireGun() {
   const s = state, gid = s.gun, g = GUNS[gid], st = s.guns[gid];
-  st.mag--; s.cool = g.rate; s.lastShot = s.t;
+  st.mag--; s.cool = g.rate; s.lastShot = s.t; bulletSpeed = g.speed;
   camera.updateMatrixWorld();
   const origin = camera.getWorldPosition(new THREE.Vector3()), fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
   const skip = viewMode === 3 && !(s.aiming && gid === 'sniper') ? origin.distanceTo(new THREE.Vector3(s.x, s.y + 1.4, s.z)) + 0.4 : 0.1;
-  const spread = g.spread * (s.aiming ? 0.35 : 1) * (s.speedNow > 1 ? 1.6 : 1), targets = shotTargets();
+  const spread = g.spread * (s.aiming ? tune.aim_spread : tune.hip_spread) * (s.speedNow > 1 ? 1.5 : 1), targets = shotTargets();
+  { // a little help: the shot bends toward an animal right next to the crosshair
+    const lim = (TOUCH ? tune.aim_assist_touch : tune.aim_assist) * Math.PI / 180; let best = null, ba = lim;
+    for (const a of animals) {
+      if (a.dead) continue; const v = new THREE.Vector3(a.x, a.h * 0.6, a.z).sub(origin), d = v.length(); if (d > Math.min(g.range, 120)) continue; // long shots are all skill
+      const ang = v.normalize().angleTo(fwd); if (ang < ba) { ba = ang; best = v; }
+    }
+    if (best) fwd.lerp(best, 0.85).normalize();
+  }
   for (let k = 0; k < g.pellets; k++) {
     const dir = fwd.clone(); dir.x += (rng() - 0.5) * spread * 2; dir.y += (rng() - 0.5) * spread * 2; dir.z += (rng() - 0.5) * spread * 2; dir.normalize();
     hitScan(origin, dir, skip, g.range, g.damage, g.force);
   }
   // kick, flash, sound, and every animal around hears it
-  s.pitch += g.recoil * (s.aiming ? 0.55 : 1); s.yaw += (rng() - 0.5) * g.recoil * 0.5; s.kick = 1;
+  const rc = g.recoil * (s.aiming ? 0.6 : 1) * tune.recoil_mult; s.rk = (s.rk || 0) + rc; s.pitch += rc * 0.35; s.yaw += (rng() - 0.5) * rc * 0.6;
+  s.kick = 1; s.shake = Math.min(1, (s.shake || 0) + g.shake * tune.shake_mult); s.hitMark = 0;
   const mz = (viewMode === 1 || s.driving ? viewMeshes[gid] : gunMeshes[gid]); mz.updateMatrixWorld();
   const mp = mz.localToWorld(mz.userData.muzzle.clone());
   muzzleLight.position.copy(mp); muzzleLight.intensity = 6; flashMesh.position.copy(mp); flashMesh.quaternion.copy(camera.quaternion); flashMesh.visible = true; s.flashT = 0.05;
@@ -1726,7 +1769,8 @@ function hitScan(origin, dir, near, far, dmg, force) {
   let bestA = null, bt = far;
   for (const a of animals) {
     if (a.dead) continue;
-    const c = new THREE.Vector3(a.x, a.h * 0.6, a.z), oc = c.clone().sub(origin), t = oc.dot(dir);
+    const dist0 = Math.hypot(a.x - origin.x, a.z - origin.z), drop = 0.5 * 9.8 * (dist0 / bulletSpeed) ** 2; // gravity pulls the bullet down
+    const c = new THREE.Vector3(a.x, a.h * 0.6 + drop, a.z), oc = c.clone().sub(origin), t = oc.dot(dir);
     if (t < near || t > bt) continue;
     if (oc.lengthSq() - t * t < a.r * a.r) { bestA = a; bt = t; }
   }
@@ -1742,7 +1786,7 @@ function hitScan(origin, dir, near, far, dmg, force) {
     addDecal(hit, null); burst(hit.point, 5, hit.object.material && hit.object.material.map === T.wood ? PARTMAT.wood : PARTMAT.dust); sfx.thudSoft();
     return;
   }
-  if (bestA) { const p = origin.clone().addScaledVector(dir, bt); burst(p, 8, PARTMAT.blood, 2); hurtAnimal(bestA, dmg, dir); }
+  if (bestA) { const p = origin.clone().addScaledVector(dir, bt); burst(p, 12, PARTMAT.blood, 3); hurtAnimal(bestA, dmg, dir); bestA.stagger = 0.35; bestA.x += dir.x * 0.25; bestA.z += dir.z * 0.25; state.hitMark = 0.25; state.hitKill = bestA.dead; sfx.hitFlesh(); }
 }
 let shotTargetsCache = null;
 const BROKEN_GLASS = new THREE.MeshStandardMaterial({ color: 0x4a5560, roughness: 0.6, metalness: 0.2, transparent: true, opacity: 0.55 });
@@ -1848,6 +1892,7 @@ function stepAnimals(dt) {
       const nx = a.x - Math.sin(a.yaw) * speed * dt, nz = a.z - Math.cos(a.yaw) * speed * dt;
       if (!animalBlocked(nx, nz, a.r)) { a.x = nx; a.z = nz; } else { a.yaw += 1.2 + rng(); a.tx = a.x - Math.sin(a.yaw) * 15; a.tz = a.z - Math.cos(a.yaw) * 15; }
     }
+    if (a.stagger > 0) { a.stagger -= dt; a.body.rotation.z = Math.sin(a.stagger * 40) * 0.15; } else if (!a.dead) a.body.rotation.z = 0;
     a.speed = speed; a.phase += speed * dt * (a.kind === 'coelho' ? 9 : 3.2);
     placeAnimal(a);
     const sw = Math.sin(a.phase) * Math.min(1, speed / 2) * (a.kind === 'coelho' ? 0.9 : 0.6);
@@ -1900,6 +1945,7 @@ function carcassNear() {
 function stepGuns(dt) {
   const s = state;
   if (s.cool > 0) s.cool -= dt;
+  s.rk = (s.rk || 0) * Math.exp(-dt * 9); s.shake = Math.max(0, (s.shake || 0) - dt * 3); if (s.hitMark > 0) s.hitMark -= dt;
   if (s.flashT > 0) { s.flashT -= dt; if (s.flashT <= 0) { flashMesh.visible = false; muzzleLight.intensity = 0; } }
   s.kick = Math.max(0, (s.kick || 0) - dt * 8);
   if (pressed('KeyQ') || pressed('WheelDown')) cycleGun(1);
@@ -1919,6 +1965,8 @@ function stepGuns(dt) {
     else { s.reload = { t: g.reload, of: g.reload }; sfx.reloadStart(); }
     return;
   }
+  { s.overAnimal = false; camera.updateMatrixWorld(); const o = camera.getWorldPosition(new THREE.Vector3()), f = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+    for (const a of animals) { if (a.dead) continue; const v = new THREE.Vector3(a.x, a.h * 0.6, a.z).sub(o), d = v.length(); if (d < g.range && v.normalize().angleTo(f) < Math.max(0.015, a.r / d)) { s.overAnimal = true; break; } } }
   const trigger = g.auto ? down.has('Mouse0') : pressed('Mouse0');
   if (trigger && s.cool <= 0 && !s.craftOpen) {
     if (st.mag > 0) { shotTargetsCache = shotTargets(); fireGun(); shotTargetsCache = null; }
@@ -1999,11 +2047,12 @@ function aimContainer() {
 }
 function placeCamera(alpha = 1) {
   const s = state, x = s.px + (s.x - s.px) * alpha, z = s.pz + (s.z - s.pz) * alpha;
-  camera.rotation.set(s.pitch, s.yaw, 0);
+  const shk = (s.shake || 0) * (s.shake || 0) * 0.03, kt = clock.now() * 60;
+  camera.rotation.set(s.pitch + (s.rk || 0) + Math.sin(kt * 1.7) * shk, s.yaw + Math.sin(kt * 2.3 + 1) * shk, Math.sin(kt * 1.1) * shk * 0.5);
   const scoped = s.aiming && s.gun === 'sniper';
   const fov = s.aiming ? (scoped ? GUNS.sniper.zoom : 52) : 72; if (Math.abs(camera.fov - fov) > 0.1) { camera.fov += (fov - camera.fov) * 0.35; camera.updateProjectionMatrix(); }
   for (const id in viewMeshes) viewMeshes[id].visible = id === s.gun && !scoped && (viewMode === 1 && !s.driving);
-  viewGun.position.set(s.aiming ? 0 : 0.2, s.aiming ? -0.12 : -0.2 - (s.reload ? 0.12 : 0), -0.42 + (s.kick || 0) * 0.06);
+  viewGun.position.set(s.aiming ? 0 : 0.2, s.aiming ? -0.12 : -0.2 - (s.reload ? 0.12 : 0), -0.42 + (s.kick || 0) * 0.12); viewGun.rotation.x = (s.kick || 0) * 0.25;
   if (scoped && !s.driving) { hero.root.visible = false; camera.position.set(x, (s.y || 0) + 1.6, z); return; }
   if (s.driving && scene !== 'title') {
     hero.root.visible = false;
@@ -2549,11 +2598,19 @@ function drawHud(day) {
   if (s.aiming && s.gun === 'sniper' && !s.driving) {
     ctx.save(); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.arc(W / 2, H / 2, H * 0.42, 0, Math.PI * 2, true); ctx.fill('evenodd');
     ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(W / 2 - H * 0.42, H / 2); ctx.lineTo(W / 2 + H * 0.42, H / 2); ctx.moveTo(W / 2, H / 2 - H * 0.42); ctx.lineTo(W / 2, H / 2 + H * 0.42); ctx.stroke();
+    { const fpx = H / (2 * Math.tan(camera.fov * Math.PI / 360)); ctx.fillStyle = 'rgba(0,0,0,0.9)'; ctx.font = `11px ${FONT}`; ctx.textAlign = 'left';
+      for (const m of [100, 200, 300]) { const drop = 0.5 * 9.8 * (m / GUNS.sniper.speed) ** 2, yy = H / 2 + Math.atan(drop / m) * fpx; ctx.fillRect(W / 2 - 10, yy - 1, 20, 2); ctx.fillText(m + ' m', W / 2 + 14, yy + 4); } }
     ctx.lineWidth = 4; ctx.beginPath(); for (const [a, b] of [[-1, 0], [1, 0], [0, 1]]) { ctx.moveTo(W / 2 + a * H * 0.42, H / 2 + b * H * 0.42); ctx.lineTo(W / 2 + a * H * 0.08, H / 2 + b * H * 0.08); } ctx.stroke(); ctx.restore();
   } else if (s.gun && !s.driving) {
-    const gap = 6 + GUNS[s.gun].spread * (s.aiming ? 0.35 : 1) * 300 + (s.kick || 0) * 10;
-    ctx.strokeStyle = 'rgba(255,250,235,0.85)'; ctx.lineWidth = 2; ctx.beginPath();
+    const gap = 5 + GUNS[s.gun].spread * (s.aiming ? tune.aim_spread : tune.hip_spread) * 260 + (s.kick || 0) * 14;
+    const onAnimal = s.overAnimal;
+    ctx.fillStyle = onAnimal ? '#ff5a4a' : 'rgba(255,250,235,0.95)'; ctx.beginPath(); ctx.arc(W / 2, H / 2, 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = onAnimal ? 'rgba(255,90,74,0.95)' : 'rgba(255,250,235,0.85)'; ctx.lineWidth = 2; ctx.beginPath();
     for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ctx.moveTo(W / 2 + a * gap, H / 2 + b * gap); ctx.lineTo(W / 2 + a * (gap + 9), H / 2 + b * (gap + 9)); } ctx.stroke();
+  }
+  if (s.hitMark > 0) { // hit marker: an X, red when it was the killing shot
+    ctx.strokeStyle = s.hitKill ? 'rgba(255,70,60,' + (s.hitMark * 4) + ')' : 'rgba(255,255,255,' + (s.hitMark * 4) + ')'; ctx.lineWidth = 2.5; ctx.beginPath();
+    for (const [a, b] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { ctx.moveTo(W / 2 + a * 7, H / 2 + b * 7); ctx.lineTo(W / 2 + a * 14, H / 2 + b * 14); } ctx.stroke();
   }
   if (s.gun) {
     const st = s.guns[s.gun], g = GUNS[s.gun], bx = W - 250, by = H - (TOUCH ? 420 : 118);
