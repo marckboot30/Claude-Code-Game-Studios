@@ -333,6 +333,8 @@ const sfx = {
     noise(G[0], G[1], G[2], 0.6); tone(G[3], G[0] * 1.2, 'sine', 0.6, -30); noise(G[0] * 3, 400, G[2] * 0.25, 0.5, 0.12); noise(G[0] * 4, 250, G[2] * 0.12, 0.5, 0.35); // crack, thump, echoes
   },
   dry: () => tone(2400, 0.03, 'square', 0.08),
+  animalHurt: k => k === 'javali' ? (tone(140, 0.3, 'sawtooth', 0.12, -60), noise(0.25, 300, 0.2, 2)) : k === 'cervo' ? tone(700, 0.35, 'sine', 0.1, -300) : tone(1500, 0.15, 'sine', 0.08, 600),
+  animalAlarm: (k, d) => { const v = Math.max(0.02, 0.12 * (1 - d / 60)); if (k === 'cervo') tone(900, 0.2, 'sine', v, -400); else if (k === 'javali') { tone(110, 0.25, 'sawtooth', v, 20); noise(0.2, 250, v * 1.5, 2); } else noise(0.08, 3000, v * 0.6, 2); },
   reloadStart: () => { noise(0.06, 2000, 0.15, 3); noise(0.05, 1500, 0.12, 3, 0.25); },
   reloadEnd: () => { noise(0.05, 2600, 0.2, 4); tone(900, 0.04, 'square', 0.06); },
   gunPick: () => { noise(0.05, 2200, 0.15, 3); noise(0.06, 1200, 0.1, 2, 0.08); },
@@ -365,6 +367,10 @@ const ITEMS = {
   bala_escopeta: { name: 'Cartucho de escopeta', ammo: true, material: true },
   bala_sniper: { name: 'Munição de sniper', ammo: true, material: true },
   bala_fuzil: { name: 'Munição de fuzil', ammo: true, material: true },
+  carne_crua: {
+    name: 'Carne crua', use() { need('hunger', tune.raw_meat_food); sfx.eat(); if (rng() < tune.raw_meat_sick_chance) { state.sick = tune.sick_time; say('A carne crua fez mal.'); sfx.sick(); } },
+  },
+  carne_assada: { name: 'Carne assada', use() { need('hunger', tune.cooked_meat_food); sfx.eat(); } },
   pano: { name: 'Pano', material: true },
   fita: { name: 'Fita adesiva', material: true },
   fosforos: { name: 'Fósforos', material: true },
@@ -1386,13 +1392,14 @@ function removeItems(id, n) {
 }
 
 // ---- Crafting ------------------------------------------------------------------------------
-const WHERE = { pano: 'armários, cômodas e caixas', fita: 'caixas e armários', fosforos: 'cômodas e armários', lenha: 'árvores fora da cidade', feijao: 'armários', sardinha: 'armários e geladeiras' };
+const WHERE = { carne_crua: 'animais caçados', pano: 'armários, cômodas e caixas', fita: 'caixas e armários', fosforos: 'cômodas e armários', lenha: 'árvores fora da cidade', feijao: 'armários', sardinha: 'armários e geladeiras' };
 const RECIPES = [
   { id: 'fogueira', name: 'Fogueira', needs: { lenha: 3, fosforos: 1 }, what: 'ilumina a noite e cozinha', make: () => placeFire() },
   { id: 'curativo', name: 'Curativo improvisado', needs: { pano: 2 }, out: 'curativo', what: '+saúde' },
   { id: 'mochila', name: 'Mochila reforçada', needs: { pano: 3, fita: 1 }, once: true, what: () => `+${tune.craft_extra_slots} espaços`, make: () => { state.extraSlots += tune.craft_extra_slots; } },
   { id: 'feijao_quente', name: 'Feijão quente', needs: { feijao: 1 }, fire: true, out: 'feijao_quente', what: () => `enche ${tune.beans_cooked_food} de fome` },
   { id: 'sardinha_assada', name: 'Sardinha assada', needs: { sardinha: 1 }, fire: true, out: 'sardinha_assada', what: 'sem risco de passar mal' },
+  { id: 'carne_assada', name: 'Carne assada', needs: { carne_crua: 1 }, fire: true, out: 'carne_assada', what: () => `enche ${tune.cooked_meat_food} de fome` },
 ];
 // What stops a recipe right now, in words; empty when it can be made.
 function missing(r) {
@@ -1674,7 +1681,118 @@ const BROKEN_GLASS = new THREE.MeshStandardMaterial({ color: 0x4a5560, roughness
 // noise: every animal within the radius hears it
 const animals = [];
 function makeNoise(x, z, r) { for (const a of animals) if (!a.dead && Math.hypot(a.x - x, a.z - z) < r) a.heard = { x, z, t: 3 }; }
-function hurtAnimal(a, dmg) {} // filled in by the animals module
+// ---- Animals to hunt: deer, boar, rabbits ------------------------------------------------------
+// They graze and wander, flee from noise and from you, and a hurt boar charges. A dead one can be
+// skinned (hold E) for raw meat, which must be cooked at a fire.
+const AN = CONFIG.fauna;
+const AMAT = {
+  deer: new THREE.MeshStandardMaterial({ color: 0x7a5636, roughness: 0.9 }), deerBelly: new THREE.MeshStandardMaterial({ color: 0xb59a78, roughness: 0.9 }),
+  boar: new THREE.MeshStandardMaterial({ color: 0x3e3530, roughness: 1 }), rabbit: new THREE.MeshStandardMaterial({ color: 0x8a7c68, roughness: 1 }),
+  dark: new THREE.MeshStandardMaterial({ color: 0x1c1714, roughness: 0.8 }), horn: new THREE.MeshStandardMaterial({ color: 0xd8cbb0, roughness: 0.6 }),
+};
+function makeAnimalMesh(kind) {
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const m = (geo, mat, x, y, z, parent = body) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.castShadow = true; parent.add(o); return o; };
+  const legs = [];
+  const leg = (x, z, len, r, mat, y) => { const pv = new THREE.Group(); pv.position.set(x, y, z); body.add(pv); m(new THREE.CylinderGeometry(r, r * 0.7, len, 6), mat, 0, -len / 2, 0, pv); legs.push(pv); };
+  let head;
+  if (kind === 'cervo') {
+    m(new THREE.CapsuleGeometry(0.24, 0.75, 4, 10), AMAT.deer, 0, 1.0, 0).rotation.x = Math.PI / 2;
+    m(new THREE.CapsuleGeometry(0.17, 0.5, 4, 8), AMAT.deerBelly, 0, 0.92, 0.02).rotation.x = Math.PI / 2;
+    const neck = m(new THREE.CylinderGeometry(0.09, 0.13, 0.55, 8), AMAT.deer, 0, 1.3, -0.5); neck.rotation.x = -0.6;
+    head = new THREE.Group(); head.position.set(0, 1.55, -0.68); body.add(head);
+    m(new THREE.BoxGeometry(0.14, 0.15, 0.32), AMAT.deer, 0, 0, -0.08, head); m(new THREE.BoxGeometry(0.08, 0.07, 0.06), AMAT.dark, 0, -0.03, -0.25, head);
+    for (const sx of [-1, 1]) { m(new THREE.ConeGeometry(0.05, 0.16, 5), AMAT.deer, sx * 0.09, 0.1, 0.04, head).rotation.z = sx * -0.7;
+      const ant = m(new THREE.CylinderGeometry(0.012, 0.02, 0.4, 5), AMAT.horn, sx * 0.07, 0.25, 0.02, head); ant.rotation.z = sx * -0.35;
+      m(new THREE.CylinderGeometry(0.01, 0.015, 0.18, 4), AMAT.horn, sx * 0.13, 0.35, -0.04, head).rotation.x = -0.8; }
+    for (const [x, z] of [[-0.13, -0.38], [0.13, -0.38], [-0.13, 0.38], [0.13, 0.38]]) leg(x, z, 0.85, 0.045, AMAT.deer, 0.88);
+    m(new THREE.ConeGeometry(0.05, 0.14, 5), AMAT.deerBelly, 0, 1.08, 0.52).rotation.x = 2.2;
+  } else if (kind === 'javali') {
+    const b = m(new THREE.CapsuleGeometry(0.3, 0.6, 4, 10), AMAT.boar, 0, 0.6, 0); b.rotation.x = Math.PI / 2; b.scale.set(1, 1, 1.15);
+    m(new THREE.BoxGeometry(0.12, 0.25, 0.7), AMAT.dark, 0, 0.92, -0.05); // bristly ridge
+    head = new THREE.Group(); head.position.set(0, 0.6, -0.55); body.add(head);
+    m(new THREE.ConeGeometry(0.22, 0.45, 8), AMAT.boar, 0, 0, -0.18, head).rotation.x = -Math.PI / 2;
+    m(new THREE.CylinderGeometry(0.07, 0.07, 0.06, 8), AMAT.dark, 0, -0.02, -0.42, head).rotation.x = Math.PI / 2;
+    for (const sx of [-1, 1]) { m(new THREE.ConeGeometry(0.015, 0.12, 4), AMAT.horn, sx * 0.08, -0.06, -0.36, head).rotation.x = -2.4; m(new THREE.ConeGeometry(0.05, 0.12, 4), AMAT.boar, sx * 0.12, 0.17, 0.02, head); }
+    for (const [x, z] of [[-0.15, -0.3], [0.15, -0.3], [-0.15, 0.32], [0.15, 0.32]]) leg(x, z, 0.42, 0.06, AMAT.dark, 0.42);
+  } else {
+    const b = m(new THREE.SphereGeometry(0.15, 10, 8), AMAT.rabbit, 0, 0.17, 0.02); b.scale.set(0.85, 0.85, 1.25);
+    head = new THREE.Group(); head.position.set(0, 0.27, -0.16); body.add(head);
+    m(new THREE.SphereGeometry(0.08, 10, 8), AMAT.rabbit, 0, 0, 0, head);
+    for (const sx of [-1, 1]) m(new THREE.CapsuleGeometry(0.02, 0.13, 3, 6), AMAT.rabbit, sx * 0.035, 0.12, 0.03, head).rotation.x = 0.3;
+    m(new THREE.SphereGeometry(0.04, 6, 5), AMAT.deerBelly, 0, 0.2, 0.2);
+    for (const [x, z] of [[-0.06, -0.08], [0.06, -0.08], [-0.07, 0.1], [0.07, 0.1]]) leg(x, z, 0.12, 0.025, AMAT.rabbit, 0.1);
+  }
+  world.add(g); return { g, body, legs, head };
+}
+function spawnAnimal(kind, x, z) {
+  const d = AN[kind], v = makeAnimalMesh(kind);
+  const a = { kind, x, z, yaw: rng() * 6.28, hp: d.hp, r: d.r, h: d.h, mode: 'idle', t: 1 + rng() * 3, tx: x, tz: z, phase: 0, speed: 0, dead: false, fallen: 0, cool: 0, heard: null, ...v };
+  animals.push(a); placeAnimal(a); return a;
+}
+function placeAnimal(a) { a.g.position.set(a.x, 0, a.z); a.g.rotation.y = a.yaw; }
+function freeSpot(x, z) {
+  return !roadRects.some(r => x > r[0] && x < r[1] && z > r[2] && z < r[3]) && !footprints.some(r => x > r[0] - 3 && x < r[1] + 3 && z > r[2] - 3 && z < r[3] + 3) && !lakes.some(l => Math.hypot(x - l.x, z - l.z) < l.r + 3);
+}
+function animalBlocked(x, z, r) {
+  for (const b of boxesNear(x, z)) if (x > b.x0 - r && x < b.x1 + r && z > b.z0 - r && z < b.z1 + r) return true;
+  return lakes.some(l => Math.hypot(x - l.x, z - l.z) < l.r + r);
+}
+function hurtAnimal(a, dmg) {
+  if (a.dead) return;
+  a.hp -= dmg; sfx.animalHurt(a.kind);
+  if (a.hp <= 0) { a.dead = true; a.mode = 'dead'; a.skinned = false; say(`Você abateu ${AN[a.kind].article}.`); return; }
+  const s = state;
+  if (a.kind === 'javali') { a.mode = 'charge'; a.t = 8; } else { a.mode = 'flee'; a.t = 6; a.tx = a.x + (a.x - s.x) * 3; a.tz = a.z + (a.z - s.z) * 3; }
+}
+function stepAnimals(dt) {
+  const s = state, maxN = LIGHT ? tune.animals_mobile : tune.animals;
+  // keep a herd around you: spawn out of sight, drop the far ones
+  if (Math.floor(s.t * 60) % 120 === 0) {
+    for (let i = animals.length - 1; i >= 0; i--) { const a = animals[i]; if (Math.hypot(a.x - s.x, a.z - s.z) > 280) { world.remove(a.g); animals.splice(i, 1); } }
+    if (animals.filter(a => !a.dead).length < maxN) {
+      const ang = rng() * 6.28, dist = 90 + rng() * 80, x = s.x + Math.cos(ang) * dist, z = s.z + Math.sin(ang) * dist;
+      if (freeSpot(x, z)) { const r = rng(); spawnAnimal(r < 0.4 ? 'coelho' : r < 0.78 ? 'cervo' : 'javali', x, z); }
+    }
+  }
+  for (const a of animals) {
+    const d = AN[a.kind];
+    if (a.dead) { a.fallen = Math.min(1, a.fallen + dt * 2.5); a.body.rotation.z = a.fallen * Math.PI / 2; a.body.position.y = -a.fallen * a.h * 0.05; continue; }
+    const pd = Math.hypot(s.x - a.x, s.z - a.z);
+    // senses: noise, and you, closer when you run, farther when you crouch still
+    const loud = s.driving ? 60 : s.speedNow > 4.5 ? d.notice * 1.4 : s.speedNow > 0.5 ? d.notice : d.notice * 0.45;
+    if (a.mode !== 'charge' && a.mode !== 'flee' && (pd < loud || a.heard)) {
+      const fx = a.heard ? a.heard.x : s.x, fz = a.heard ? a.heard.z : s.z;
+      a.mode = 'flee'; a.t = 5 + rng() * 3; a.tx = a.x + (a.x - fx) * 4; a.tz = a.z + (a.z - fz) * 4; sfx.animalAlarm(a.kind, pd);
+    }
+    a.heard = null; a.t -= dt; a.cool -= dt;
+    let speed = 0;
+    if (a.mode === 'idle') { if (a.t <= 0) { a.mode = 'walk'; a.t = 3 + rng() * 5; const ang = rng() * 6.28; a.tx = a.x + Math.cos(ang) * 12; a.tz = a.z + Math.sin(ang) * 12; } }
+    else if (a.mode === 'walk') { speed = d.walk; if (a.t <= 0 || Math.hypot(a.tx - a.x, a.tz - a.z) < 1) { a.mode = 'idle'; a.t = 2 + rng() * 5; } }
+    else if (a.mode === 'flee') { speed = d.run; if (a.t <= 0) { a.mode = 'idle'; a.t = 2; } }
+    else if (a.mode === 'charge') {
+      speed = d.run; a.tx = s.x; a.tz = s.z;
+      if (pd < 1.5 && a.cool <= 0 && !s.driving) { s.health -= d.damage; a.cool = 1.3; say(`O javali te atacou! -${d.damage}`); sfx.thud(); sfx.animalHurt('javali'); }
+      if (a.t <= 0 || pd > 45) { a.mode = 'flee'; a.t = 4; }
+    }
+    if (speed > 0) {
+      const want = Math.atan2(-(a.tx - a.x), -(a.tz - a.z)); a.yaw = lerpAngle(a.yaw, want, Math.min(1, 5 * dt));
+      const nx = a.x - Math.sin(a.yaw) * speed * dt, nz = a.z - Math.cos(a.yaw) * speed * dt;
+      if (!animalBlocked(nx, nz, a.r)) { a.x = nx; a.z = nz; } else { a.yaw += 1.2 + rng(); a.tx = a.x - Math.sin(a.yaw) * 15; a.tz = a.z - Math.cos(a.yaw) * 15; }
+    }
+    a.speed = speed; a.phase += speed * dt * (a.kind === 'coelho' ? 9 : 3.2);
+    placeAnimal(a);
+    const sw = Math.sin(a.phase) * Math.min(1, speed / 2) * (a.kind === 'coelho' ? 0.9 : 0.6);
+    a.legs.forEach((l, i) => l.rotation.x = (a.kind === 'coelho' ? (i < 2 ? sw : sw) : (i === 0 || i === 3 ? sw : -sw)));
+    if (a.kind === 'coelho') a.body.position.y = Math.max(0, Math.sin(a.phase)) * 0.12 * Math.min(1, speed);
+    a.head.rotation.x = a.mode === 'idle' ? 0.5 + Math.sin(s.t * 1.3 + a.x) * 0.1 : 0; // grazing
+  }
+}
+function carcassNear() {
+  let best = null, bd = 2.2;
+  for (const a of animals) if (a.dead && !a.skinned) { const d = Math.hypot(a.x - state.x, a.z - state.z); if (d < bd) { bd = d; best = a; } }
+  return best;
+}
 function stepGuns(dt) {
   const s = state;
   if (s.cool > 0) s.cool -= dt;
@@ -1736,11 +1854,12 @@ function reset() {
     x: 0, z: 118, px: 0, pz: 118, yaw: 0, pitch: 0,
     hour: sh !== null ? Number(sh) : tune.start_hour, startHour: sh !== null ? Number(sh) : tune.start_hour,
     health: 100, hunger: tune.start_hunger, thirst: tune.start_thirst, sick: 0,
-    inv: [{ id: 'agua', n: 1 }, { id: 'cereal', n: 1 }], extraSlots: 0, craftOpen: false, gun: null, aiming: false, reload: null, cool: 0, kick: 0, flashT: 0, pickAnim: 0, guns: Object.fromEntries(Object.keys(CONFIG.guns).map(g => [g, { has: false, mag: 0 }])), driving: null, hold: null, act: null, y: 0, air: false, airVy: 0, lookT: 9, found: ['Santa Luzia'], chop: null, tree: null, flash: false, search: null, aim: null, msgs: [],
+    inv: [{ id: 'agua', n: 1 }, { id: 'cereal', n: 1 }], extraSlots: 0, craftOpen: false, skin: null, carcass: null, gun: null, aiming: false, reload: null, cool: 0, kick: 0, flashT: 0, pickAnim: 0, guns: Object.fromEntries(Object.keys(CONFIG.guns).map(g => [g, { has: false, mag: 0 }])), driving: null, hold: null, act: null, y: 0, air: false, airVy: 0, lookT: 9, found: ['Santa Luzia'], chop: null, tree: null, flash: false, search: null, aim: null, msgs: [],
     walked: 0, bob: 0, heart: 0, face: 0, crouch: 0, speedNow: 0, searched: 0, eaten: 0, days: 0, dead: false,
   };
   for (const c of containers) { c.items = fillContainer(c); c.searched = false; c.refillAt = 0; }
   clearFires(); for (const d of decals) d.parent && d.parent.remove(d); decals.length = 0;
+  for (const a of animals) world.remove(a.g); animals.length = 0;
   if (playerBody.world !== phys) phys.addBody(playerBody);
   playerBody.position.set(state.x, 0.05, state.z); playerBody.velocity.setZero();
   for (const c of cars) c.fuel = Math.floor(rng() * tune.car_start_fuel_max);
@@ -2100,7 +2219,8 @@ const scenes = {
         if (Math.hypot(f.x - s.x, f.z - s.z) < 25) say('A fogueira apagou.');
       }
       if (pressed('KeyF')) { s.flash = !s.flash; sfx.click(); }
-      stepGuns(dt); stepParticles(dt); if (s.pickAnim > 0) s.pickAnim -= dt;
+      stepGuns(dt); stepParticles(dt); stepAnimals(dt); if (s.pickAnim > 0) s.pickAnim -= dt;
+      if (!s.driving && s.speedNow > 4.5 && Math.floor(s.t * 60) % 20 === 0) makeNoise(s.x, s.z, 22);
       // search
       placeCamera();
       const c = s.driving ? null : aimContainer(); s.aim = c;
@@ -2123,7 +2243,19 @@ const scenes = {
         if (s.act && pressed('KeyE')) doAct(s.act);
       }
       if (pressed('KeyG') && !s.driving) grabOrThrow();
-      const tr = c || s.act || s.driving ? null : aimTree(); s.tree = tr;
+      const carc = c || s.act || s.driving ? null : carcassNear(); s.carcass = carc;
+      if (carc && down.has('KeyE')) {
+        if (!s.skin || s.skin.a !== carc) s.skin = { a: carc, p: 0, n: 0 };
+        s.skin.p += dt / tune.skin_time; if (s.skin.p * 6 > s.skin.n) { s.skin.n++; sfx.rustle(); }
+        s.face = lerpAngle(s.face, Math.atan2(-(carc.x - s.x), -(carc.z - s.z)), Math.min(1, 10 * dt));
+        if (s.skin.p >= 1) {
+          carc.skinned = true; s.skin = null; let got = 0;
+          for (let i = 0; i < AN[carc.kind].meat; i++) if (addItem('carne_crua')) got++;
+          say(got ? `Pegou: ${got} × Carne crua` : 'Mochila cheia.'); sfx.pick(); s.pickAnim = 0.7;
+          setTimeout(() => { world.remove(carc.g); const i = animals.indexOf(carc); if (i >= 0) animals.splice(i, 1); }, 0);
+        }
+      } else s.skin = null;
+      const tr = c || s.act || s.driving || carc ? null : aimTree(); s.tree = tr;
       if (tr && down.has('KeyE')) {
         if (!s.chop || s.chop.t !== tr) s.chop = { t: tr, p: 0, n: 0 };
         s.chop.p += dt / tune.chop_time;
@@ -2131,7 +2263,7 @@ const scenes = {
         s.face = lerpAngle(s.face, Math.atan2(-(tr.x - s.x), -(tr.z - s.z)), Math.min(1, 10 * dt));
         if (s.chop.p >= 1) { s.chop = null; if (addItem('lenha')) { say('Pegou: Lenha'); sfx.pick(); } else { say('Mochila cheia: sem espaço para a lenha.'); sfx.empty(); } }
       } else s.chop = null;
-      s.crouch += ((s.search ? 1 : 0) - s.crouch) * Math.min(1, 10 * dt);
+      s.crouch += ((s.search || s.skin ? 1 : 0) - s.crouch) * Math.min(1, 10 * dt);
       if (s.search) { const p = s.search.c.group.position; s.face = lerpAngle(s.face, Math.atan2(-(p.x - s.x), -(p.z - s.z)), Math.min(1, 10 * dt)); }
       for (const m of s.msgs) m.life -= dt;
       s.msgs = s.msgs.filter(m => m.life > 0);
@@ -2220,6 +2352,12 @@ function icon(id, x, y, s) { // x,y centre; every item drawn
     const col = { bala_pistola: '#c9a24a', bala_escopeta: '#a8322a', bala_sniper: '#b08a3a', bala_fuzil: '#9a8a4a' }[id];
     ctx.fillStyle = '#3b3a34'; rr(-16, -2, 32, 18, 2); ctx.fill();
     for (let i = 0; i < 4; i++) { const x = -12 + i * 8; ctx.fillStyle = col; ctx.fillRect(x - 2.5, -14, 5, 14); ctx.fillStyle = id === 'bala_escopeta' ? '#c9a24a' : '#8a6a3a'; ctx.beginPath(); ctx.moveTo(x - 2.5, -14); ctx.lineTo(x, -19); ctx.lineTo(x + 2.5, -14); ctx.fill(); }
+  } else if (id === 'carne_crua' || id === 'carne_assada') {
+    const raw = id === 'carne_crua';
+    ctx.fillStyle = raw ? '#a8353a' : '#6e3d22'; ctx.beginPath(); ctx.ellipse(-2, 2, 15, 11, -0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = raw ? '#e6b0a8' : '#a5704a'; ctx.beginPath(); ctx.ellipse(-4, 0, 9, 5, -0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ece3cf'; ctx.fillRect(10, -12, 5, 12); ctx.beginPath(); ctx.arc(12.5, -13, 3.5, 0, Math.PI * 2); ctx.fill();
+    if (!raw) { ctx.strokeStyle = '#3a2010'; ctx.lineWidth = 1.5; for (const x of [-10, -4, 2]) { ctx.beginPath(); ctx.moveTo(x, -6); ctx.lineTo(x + 6, 8); ctx.stroke(); } }
   } else if (id === 'galao') {
     ctx.fillStyle = '#a32d22'; rr(-13, -12, 26, 30, 3); ctx.fill(); ctx.fillStyle = '#7d2019'; ctx.fillRect(-13, -12, 26, 5);
     ctx.strokeStyle = '#d9c9b0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-9, -4); ctx.lineTo(9, 14); ctx.moveTo(9, -4); ctx.lineTo(-9, 14); ctx.stroke();
@@ -2342,6 +2480,11 @@ function drawHud(day) {
     const a = s.act, k = TOUCH ? 'VASCULHAR' : 'E';
     const label = a.kind === 'car' ? `${k}: entrar no carro  ·  combustível ${Math.round(a.car.fuel)}%` : a.kind === 'door' ? `${k}: ${a.door.open ? 'fechar' : 'abrir'} a porta` : `${k}: abastecer o carro (${a.pump.uses} restam)`;
     shadowText(label, W / 2, H / 2 + 48, 20, '#fff');
+  } else if (s.skin) {
+    shadowText('Esfolando…', W / 2, H / 2 + 48, 20, '#fff');
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(W / 2 - 90, H / 2 + 66, 180, 8); ctx.fillStyle = '#b0413a'; ctx.fillRect(W / 2 - 90, H / 2 + 66, 180 * Math.min(1, s.skin.p), 8);
+  } else if (s.carcass) {
+    shadowText(`${TOUCH ? 'Segure VASCULHAR' : 'Segure E'}: esfolar ${AN[s.carcass.kind].name}`, W / 2, H / 2 + 48, 20, '#fff');
   } else if (s.chop) {
     shadowText('Cortando lenha…', W / 2, H / 2 + 48, 20, '#fff');
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(W / 2 - 90, H / 2 + 66, 180, 8);

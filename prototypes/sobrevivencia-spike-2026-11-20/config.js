@@ -79,6 +79,14 @@ window.CONFIG = {
   gun_find_mult: { value: 1, min: 0, max: 5, step: 0.1 },       // multiplica a chance de achar armas
   max_decals: { value: 80, min: 10, max: 300, step: 10 },       // marcas de tiro no mundo
 
+  // --- Animais ---
+  animals: { value: 10, min: 0, max: 40, step: 1 },             // vivos em volta (computador)
+  animals_mobile: { value: 6, min: 0, max: 30, step: 1 },       // vivos em volta (celular)
+  skin_time: { value: 3, min: 0.5, max: 10, step: 0.25 },       // segundos segurando E para esfolar
+  raw_meat_food: { value: 20, min: 0, max: 100, step: 1 },
+  raw_meat_sick_chance: { value: 0.6, min: 0, max: 1, step: 0.05 },
+  cooked_meat_food: { value: 45, min: 0, max: 100, step: 1 },
+
   // --- Câmera em terceira pessoa ---
   cam_distance: { value: 2.8, min: 1, max: 6, step: 0.1 },    // m atrás do personagem
   cam_shoulder: { value: 0.55, min: -1.5, max: 1.5, step: 0.05 }, // m para o lado (positivo: ombro direito)
@@ -102,6 +110,14 @@ window.CONFIG = {
   fog_night_far: { value: 50, min: 15, max: 150, step: 5 },   // m à noite
 
   volume: { value: 0.5, min: 0, max: 1, step: 0.05 },
+
+  // Animais: vida, velocidade andando e fugindo (m/s), raio para o tiro (m), altura (m), carne,
+  // distância em que te percebem andando (m), dano do ataque (javali).
+  fauna: {
+    cervo: { name: 'o cervo', article: 'um cervo', hp: 80, walk: 1.4, run: 9, r: 0.55, h: 1.5, meat: 4, notice: 32, damage: 0 },
+    javali: { name: 'o javali', article: 'um javali', hp: 110, walk: 1.2, run: 7, r: 0.5, h: 0.9, meat: 3, notice: 22, damage: 15 },
+    coelho: { name: 'o coelho', article: 'um coelho', hp: 15, walk: 1.0, run: 7, r: 0.22, h: 0.35, meat: 1, notice: 14, damage: 0 },
+  },
 
   // Armas: carregador (mag), dano, tempo entre tiros (s), abertura (rad), alcance (m), recarga (s),
   // chumbos por tiro, força do impacto, coice (rad), raio do barulho (m), chance de achar por móvel,
