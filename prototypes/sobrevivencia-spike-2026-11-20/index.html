@@ -33,7 +33,7 @@ const TOUCH = params.get('touch') === '1' || (params.get('touch') !== '0' &&
   ((window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window));
 const tune = new Proxy({}, { get: (_, k) => CONFIG[k].value }); // live: tune.speed is CONFIG.speed.value
 const STEP = 1 / 60;
-const W = 1280, H = 720;
+let W = 1280, H = 720; // a computer keeps 16:9; a phone fills its screen at a 480-high logical size (fit)
 const PIXEL = false;
 const FONT = '"Segoe UI", "Helvetica Neue", Arial, sans-serif';
 const TITLE = 'SOBREVIVÊNCIA';
@@ -79,6 +79,11 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 function fit() {
+  if (TOUCH) { // fill the phone: a smaller logical height makes the HUD and text bigger on screen
+    H = 480; W = Math.max(640, Math.round(H * innerWidth / Math.max(1, innerHeight)));
+    if (fit.cam) layoutButtons(); // the buttons exist once the world is built
+  }
+  if (fit.cam) { fit.cam.aspect = W / H; fit.cam.updateProjectionMatrix(); }
   const s = Math.min(innerWidth / W, innerHeight / H);
   const r = s * (devicePixelRatio || 1);
   const cw = Math.round(W * s), ch = Math.round(H * s);
@@ -129,12 +134,14 @@ document.addEventListener('pointerlockchange', () => {
 // Left side: a joystick that appears where the thumb lands. Right side: drag to look.
 // Buttons: search (hold), run (toggle), flashlight, pause. A tap on a backpack slot uses it.
 const touch = { joy: null, look: null, run: false, btn: new Map(), joyX: 0, joyY: 0 };
-const BTN = {
-  search: { x: W - 130, y: H - 175, r: 66, label: 'VASCULHAR' },
-  run: { x: W - 275, y: H - 92, r: 46, label: 'CORRER' },
-  flash: { x: W - 92, y: H - 345, r: 42, label: 'LANTERNA' },
-  pause: { x: W - 48, y: 48, r: 30, label: '' },
-};
+const BTN = {};
+function layoutButtons() { // the right thumb's column, kept clear of the backpack
+  BTN.search = { x: W - 118, y: H - 140, r: 62, label: 'VASCULHAR' };
+  BTN.run = { x: W - 255, y: H - 215, r: 44, label: 'CORRER' };
+  BTN.flash = { x: W - 80, y: H - 295, r: 40, label: 'LANTERNA' };
+  BTN.pause = { x: W - 44, y: 44, r: 28, label: '' };
+}
+layoutButtons();
 function toLogical(e) {
   const r = canvas.getBoundingClientRect();
   return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
@@ -205,7 +212,7 @@ addEventListener('contextmenu', e => { if (TOUCH) e.preventDefault(); });
 function drawTouch() {
   ctx.save();
   // joystick: where the thumb is, or a ghost where it usually goes
-  const j = touch.joy || { ox: 190, oy: H - 200, x: 190, y: H - 200 };
+  const j = touch.joy || { ox: 150, oy: H - 150, x: 150, y: H - 150 };
   ctx.globalAlpha = touch.joy ? 0.9 : 0.4;
   ctx.fillStyle = 'rgba(20,20,18,0.35)'; ctx.strokeStyle = 'rgba(230,225,210,0.5)'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.arc(j.ox, j.oy, 70, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -310,6 +317,7 @@ function need(k, v) { state[k] = Math.max(0, Math.min(100, state[k] + v)); }
 const world = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(72, W / H, 0.05, 300);
 camera.rotation.order = 'YXZ';
+fit.cam = camera; fit();
 world.add(camera);
 world.fog = new THREE.Fog(0x9aa0a4, 20, 150);
 const hemi = new THREE.HemisphereLight(0xc4cad0, 0x3b3a30, 0.8); world.add(hemi);
@@ -904,7 +912,7 @@ function drawHud(day) {
   shadowText(clockStr(), 28, 34, 22, '#e8e2d4', 'left', '600');
   shadowText(day < 0.3 ? (s.flash ? 'Noite  ·  lanterna ligada' : TOUCH ? 'Noite  ·  ligue a LANTERNA' : 'Noite  ·  F liga a lanterna') : '', 28, 62, 15, '#b8b2a4', 'left');
   // needs
-  const by = TOUCH ? 84 : H - 124; // on a phone the joystick takes the bottom-left
+  const by = TOUCH ? 70 : H - 124; // on a phone the joystick takes the bottom-left
   ctx.fillStyle = 'rgba(10,10,10,0.45)'; ctx.fillRect(16, by, 290, 108);
   bar(28, by + 12, 'Saúde', s.health, s.sick > 0 ? '#8a9a3a' : '#b0413a', s.health < 30);
   bar(28, by + 42, 'Fome', s.hunger, '#c08a3a', s.hunger < 20);
@@ -964,6 +972,8 @@ window.game = {
   hold(code, on) { on ? down.add(code) : down.delete(code); },
   get events() { return events; },
   houses, containers,
+  get size() { return [W, H]; },
+  get buttons() { return BTN; },
   step(n = 1, draw = true, alpha = 1) {
     for (let i = 0; i < n; i++) step();
     if (draw) { ALPHA = alpha; drawFrame(); }
