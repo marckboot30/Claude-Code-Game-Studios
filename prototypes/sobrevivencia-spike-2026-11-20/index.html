@@ -29,6 +29,8 @@
 
 // ---- Built to be checked ----------------------------------------------------------------
 const params = new URLSearchParams(location.search);
+// Online state (PlayDrop). Filled in by the online module near the end of this script.
+const NET = { sdk: null, room: null, on: false, joining: false, me: null, host: false, hour: 8, status: '', remotes: new Map(), drivers: new Set(), conts: {}, carStates: {}, party: null, sendT: 0 };
 // Phones and tablets: on-screen controls and lighter graphics. ?touch=1 forces it, ?touch=0 turns it off.
 const TOUCH = params.get('touch') === '1' || (params.get('touch') !== '0' &&
   ((window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window));
@@ -115,6 +117,7 @@ addEventListener('keydown', e => {
   startAudio();
   if (!e.repeat) { down.add(e.code); hit.add(e.code); }
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+  if (e.code === 'Escape' && NET.sdk) down.delete('Escape'), hit.delete('Escape'); // Escape belongs to PlayDrop's pause menu
 });
 addEventListener('keyup', e => down.delete(e.code));
 addEventListener('blur', () => down.clear());
@@ -126,9 +129,10 @@ canvas.addEventListener('pointerdown', e => {
   if (e.pointerType === 'touch' || TOUCH) return; // touch has its own handler
   startAudio();
   if (scene === 'play' && document.pointerLockElement === canvas) { down.add('Mouse' + e.button); hit.add('Mouse' + e.button); return; }
-  if (scene === 'title') { reset(); scene = 'play'; }
+  if (scene === 'title') { if (!titleClick(toLogical(e))) return; }
+  else if (scene === 'connecting') { if (!NET.joining) scene = 'title'; return; }
   else if (scene === 'pause') scene = 'play';
-  else if (scene === 'over') { runs++; reset(); scene = 'play'; }
+  else if (scene === 'over') { runs++; reset(NET.on); scene = 'play'; }
   if (scene === 'play' && canvas.requestPointerLock) { try { canvas.requestPointerLock(); } catch (e) { /* not allowed here */ } }
 });
 document.addEventListener('pointerlockchange', () => {
@@ -175,9 +179,10 @@ addEventListener('pointerdown', e => {
   if (e.pointerType !== 'touch' && !TOUCH) return;
   e.preventDefault(); startAudio();
   if (portrait()) return;
-  if (scene === 'title') { goFullscreen(); reset(); scene = 'play'; return; }
+  if (scene === 'title') { goFullscreen(); titleClick(toLogical(e)); return; }
+  if (scene === 'connecting') { if (!NET.joining) scene = 'title'; return; }
   if (scene === 'pause') { scene = 'play'; return; }
-  if (scene === 'over') { runs++; reset(); scene = 'play'; return; }
+  if (scene === 'over') { runs++; reset(NET.on); scene = 'play'; return; }
   if (scene !== 'play') return;
   const p = toLogical(e);
   for (const k in BTN) {
@@ -326,8 +331,9 @@ function tone(freq, dur, type = 'sine', vol = 0.2, slide = 0) {
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.connect(g).connect(audio.out); o.start(t); o.stop(t + dur);
 }
+let VOLK = 1;
 function shot(dur, freq, vol, type = 'bandpass', q = 0.7, delay = 0, send = 0.4, attack = 0.002) {
-  if (!audio || muted) return;
+  if (!audio || muted) return; vol *= VOLK;
   const t = audio.ac.currentTime + delay, s = audio.ac.createBufferSource(), f = audio.ac.createBiquadFilter(), g = audio.ac.createGain();
   s.buffer = audio.noise; f.type = type; f.frequency.value = freq; f.Q.value = q;
   g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
@@ -335,14 +341,14 @@ function shot(dur, freq, vol, type = 'bandpass', q = 0.7, delay = 0, send = 0.4,
   s.start(t, (t * 3.1) % 1.5); s.stop(t + dur + 0.05);
 }
 function boom(f0, f1, dur, vol, delay = 0) {
-  if (!audio || muted) return;
+  if (!audio || muted) return; vol *= VOLK;
   const t = audio.ac.currentTime + delay, o = audio.ac.createOscillator(), g = audio.ac.createGain();
   o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.connect(g).connect(audio.out); const sg = audio.ac.createGain(); sg.gain.value = 0.3; g.connect(sg).connect(audio.verb); o.start(t); o.stop(t + dur + 0.05);
 }
 function noise(dur, freq, vol = 0.2, q = 1, delay = 0) {
-  if (!audio || muted) return;
+  if (!audio || muted) return; vol *= VOLK;
   const t = audio.ac.currentTime + delay, s = audio.ac.createBufferSource(), f = audio.ac.createBiquadFilter(), g = audio.ac.createGain();
   s.buffer = audio.noise; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
   g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.01);
@@ -1306,6 +1312,8 @@ function genChunk(c) {
     c.cars = save.cars.map(sc => { const nc = car(sc.x, sc.z, sc.rot, sc.mi); nc.fuel = sc.fuel; return nc; });
     c.pumps.forEach((pm, i) => { if (save.pumps[i] !== undefined) pm.uses = save.pumps[i]; });
   } else for (const car of c.cars) car.fuel = Math.floor(wrng() * tune.car_start_fuel_max);
+  c.containers.forEach((cn, i) => { cn.id = c.key + '#' + i; const k = NET.conts[cn.id]; if (k) { cn.items = k.items.slice(); cn.searched = k.searched; } });
+  c.cars.forEach((cr, i) => { cr.id = c.key + '#' + i; const k = NET.carStates[cr.id]; if (k) applyCarState(cr, k); });
   if (townName && !PLACES.some(p => p.name === townName)) PLACES.push({ name: townName, x: cx, z: rz !== null ? rz : cz, r: 60, gen: c.key });
   world.updateMatrixWorld(true); bakeChunk(c); indexBoxes(c.boxes);
   for (const o of c.objs) o.visible = c.on;
@@ -1381,6 +1389,7 @@ function updateChunks() {
 buildWorld();
 chunkWorld(); bakeChunks(); indexBoxes();
 for (const d of doors) globalSolids.push(d.leaf); // the camera stops in front of doors
+containers.forEach((c, i) => c.id = 'o' + i); cars.forEach((c, i) => c.id = 'o' + i); // the same names on every player's game
 for (const l of lakes) { const lb = new CANNON.Body({ mass: 0, collisionFilterGroup: G_WATER }); lb.addShape(new CANNON.Cylinder(l.r, l.r, 2, 24)); lb.position.set(l.x, 0, l.z); phys.addBody(lb); }
 for (const h of houses) spawnPropsInHouse(h);
 for (let i = 0; i < 14; i++) spawnProp(i % 2 ? 'pneu' : 'balde', (wrng() - 0.5) * 8, 0.5, 120 - i * 18 + wrng() * 6, wrng() * 6);
@@ -1389,9 +1398,9 @@ for (let i = 0; i < 14; i++) spawnProp(i % 2 ? 'pneu' : 'balde', (wrng() - 0.5) 
 // Built from capsules and boxes, facing local -z. Legs and arms swing from hip and shoulder
 // pivots; crouching lowers the body and reaches the arms forward.
 let viewMode = 3; // 3: over the shoulder, 1: through the eyes (V or the camera button)
-const hero = (() => {
+function makeSurvivor(look = {}) {
   const C = (c, r = 0.85) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
-  const skin = C(0xb88a6c, 0.7), jacket = C(0x4b5340), pants = C(0x30363f), boots = C(0x2b231d), cap = C(0x6b5a3f), pack = C(0x5b4a33), strap = C(0x2e2a24);
+  const skin = C(look.skin || 0xb88a6c, 0.7), jacket = C(look.jacket || 0x4b5340), pants = C(look.pants || 0x30363f), boots = C(0x2b231d), cap = C(look.cap || 0x6b5a3f), pack = C(0x5b4a33), strap = C(0x2e2a24);
   const root = new THREE.Group(), body = new THREE.Group(); root.rotation.order = 'YXZ'; root.add(body); world.add(root);
   const part = (geo, mat, x, y, z, parent) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
   const legs = [-0.11, 0.11].map(x => {
@@ -1419,10 +1428,13 @@ const hero = (() => {
   });
   const hand = new THREE.Group(); hand.position.set(0, -0.55, -0.02); arms[1].add(hand);
   return { root, body, torso, legs, arms, hand };
-})();
+}
+const hero = makeSurvivor();
 function lerpAngle(a, b, t) { let d = ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI; return a + d * t; }
-function poseHero(x, z) {
-  const s = state, h = hero, c = s.crouch || 0;
+function poseHero(x, z) { poseFigure(hero, state, x, z, heldAxe, gunMeshes); }
+// Pose a survivor from a state: the player's own, or a remote player's from the network.
+function poseFigure(h, s, x, z, axe, guns) {
+  const c = s.crouch || 0;
   const sk = s.swimK || 0;
   h.root.position.set(x, (s.y || 0) - 0.25 * sk, z); h.root.rotation.y = s.face; h.root.rotation.x = -1.25 * sk;
   const amp = s.speedNow > 4.5 ? 0.85 : 0.5, sw = Math.sin(s.bob * 1.4) * amp * Math.min(1, s.speedNow / 2);
@@ -1433,7 +1445,7 @@ function poseHero(x, z) {
   const reach = c > 0.5 ? Math.sin(s.t * 9) * 0.35 : 0; // rummaging: hands in and out of the furniture
   h.arms[0].rotation.x = -sw * 0.8 * (1 - c) + 1.25 * c + reach; h.arms[1].rotation.x = sw * 0.8 * (1 - c) + 1.25 * c - reach;
   h.arms[0].rotation.z = -0.08; h.arms[1].rotation.z = 0.08;
-  heldAxe.visible = !!s.chop;
+  axe.visible = !!s.chop;
   if (s.hold && !s.chop && sk < 0.5) { // both hands around the object, out in front of the chest
     const big = PROP[s.hold.kind].mass > 3;
     h.arms[0].rotation.set(big ? 1.15 : 1.3, 0, big ? 0.42 : 0.3); h.arms[1].rotation.set(big ? 1.15 : 1.3, 0, big ? -0.42 : -0.3);
@@ -1453,7 +1465,7 @@ function poseHero(x, z) {
     h.legs[0].rotation.x = 0.55 + Math.sin(ph * 2.2) * 0.25; h.legs[1].rotation.x = 0.55 - Math.sin(ph * 2.2) * 0.25; h.torso.rotation.x = 0.25; // legs trail low in the water
   }
   // a gun in hand: arms forward along the aim, the off hand under long guns
-  for (const id in gunMeshes) gunMeshes[id].visible = id === s.gun && !s.chop && !s.search;
+  for (const id in guns) guns[id].visible = id === s.gun && !s.chop && !s.search;
   if (s.gun && !s.hold && !s.driving && !s.chop && !s.search && !(s.pickAnim > 0) && sk < 0.5) {
     const up = s.pitch * 0.9, rl = s.reload ? 0.5 : 0, long = s.gun !== 'pistola';
     h.arms[1].rotation.set(Math.PI / 2 + up - rl + (s.kick || 0) * 0.35, 0, 0.05);
@@ -1521,6 +1533,10 @@ const FIREMAT = {
 };
 function placeFire() {
   const s = state, x = s.x - Math.sin(s.yaw) * 1.3, z = s.z - Math.cos(s.yaw) * 1.3;
+  placeFireAt(x, z, s.hour + tune.fire_hours); if (NET.on) NET.room.send('fire', { x, z, outAt: s.hour + tune.fire_hours });
+}
+function placeFireAt(x, z, outAt) {
+  const s = state;
   const g = new THREE.Group(); g.position.set(x, 0, z); world.add(g);
   for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, st = mesh(new THREE.DodecahedronGeometry(0.1, 0), FIREMAT.stone, Math.cos(a) * 0.38, 0.06, Math.sin(a) * 0.38, g); st.rotation.set(a, a * 2, 0); }
   for (let i = 0; i < 3; i++) { const l = mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.6, 7), FIREMAT.log, 0, 0.12, 0, g); l.rotation.set(Math.PI / 2 - 0.35, i * 2.1, 0); }
@@ -1529,7 +1545,7 @@ function placeFire() {
   const core = mesh(new THREE.ConeGeometry(0.1, 0.35, 6), FIREMAT.core, 0, 0.32, 0, g, false);
   const light = new THREE.PointLight(0xff9a4a, tune.fire_light, 16, 1.6); light.position.y = 0.8; g.add(light);
   const box = staticBody({ x0: x - 0.4, x1: x + 0.4, z0: z - 0.4, z1: z + 0.4, y0: 0, y1: 0.5 }); phys.addBody(box);
-  fires.push({ g, flame, core, light, box, x, z, lit: true, outAt: s.hour + tune.fire_hours });
+  fires.push({ g, flame, core, light, box, x, z, lit: true, outAt });
   sfx.fire();
 }
 function nearFire() { return fires.some(f => f.lit && Math.hypot(f.x - state.x, f.z - state.z) < tune.fire_reach); }
@@ -1585,6 +1601,7 @@ function doAct(a) {
 }
 function enterCar(c) {
   const s = state;
+  if (NET.on) { if (NET.drivers.has(c.id)) { say('Alguém já está dirigindo este carro.'); return; } NET.room.send('carClaim', { cid: c.id }); c.remote = false; setCarRemote(c, false); }
   if (s.hold) dropProp();
   s.driving = c; phys.removeBody(playerBody); c.chassis.wakeUp();
   s.yaw = carYaw(c); s.pitch = -0.22; s.lookT = 0;
@@ -1603,6 +1620,7 @@ function engineSound(c, throttle, sp) {
 }
 function leaveCar() {
   engineSound(null, 0, 0);
+  if (NET.on && state.driving) netSendCar(state.driving, true);
   const s = state, c = s.driving; if (!c) return;
   const q = c.chassis.quaternion, right = q.vmult(new CANNON.Vec3(1, 0, 0)), p = c.chassis.position;
   playerBody.position.set(p.x + right.x * 1.9, 0.05, p.z + right.z * 1.9); playerBody.velocity.setZero();
@@ -1700,10 +1718,14 @@ const heldGun = new THREE.Group(); heldGun.rotation.x = -Math.PI / 2; // in the 
 const viewGun = new THREE.Group(); camera.add(viewGun);                // first-person view model
 const gunMeshes = {}, viewMeshes = {};
 hero.hand.add(heldGun);
-const heldAxe = new THREE.Group(); heldAxe.rotation.x = -Math.PI / 2; hero.hand.add(heldAxe);
-{ const hm = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.75, 6), GUNMAT.wood); hm.rotation.x = Math.PI / 2; hm.position.z = -0.25; heldAxe.add(hm);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.17, 0.12), GUNMAT.steel); head.position.set(0, 0.06, -0.58); heldAxe.add(head);
-  const edge = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.2, 0.04), new THREE.MeshStandardMaterial({ color: 0xb8bcc0, metalness: 0.9, roughness: 0.25 })); edge.position.set(0, 0.13, -0.58); heldAxe.add(edge); heldAxe.visible = false; }
+const AXE_EDGE = new THREE.MeshStandardMaterial({ color: 0xb8bcc0, metalness: 0.9, roughness: 0.25 });
+function makeAxe() {
+  const g = new THREE.Group(); g.rotation.x = -Math.PI / 2;
+  const hm = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.75, 6), GUNMAT.wood); hm.rotation.x = Math.PI / 2; hm.position.z = -0.25; g.add(hm);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.17, 0.12), GUNMAT.steel); head.position.set(0, 0.06, -0.58); g.add(head);
+  const edge = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.2, 0.04), AXE_EDGE); edge.position.set(0, 0.13, -0.58); g.add(edge); g.visible = false; return g;
+}
+const heldAxe = makeAxe(); hero.hand.add(heldAxe);
 for (const id in GUNS) { gunMeshes[id] = makeGunMesh(id); heldGun.add(gunMeshes[id]); viewMeshes[id] = makeGunMesh(id); viewGun.add(viewMeshes[id]); }
 const muzzleLight = new THREE.PointLight(0xffc070, 0, 8, 2); world.add(muzzleLight);
 const flashMat = new THREE.MeshBasicMaterial({ color: 0xffd28a, transparent: true, opacity: 0.9, depthWrite: false });
@@ -1780,11 +1802,20 @@ function fireGun() {
   const mp = mz.localToWorld(mz.userData.muzzle.clone());
   muzzleLight.position.copy(mp); muzzleLight.intensity = 6; flashMesh.position.copy(mp); flashMesh.quaternion.copy(camera.quaternion); flashMesh.visible = true; s.flashT = 0.05;
   sfx.gun(gid); makeNoise(s.x, s.z, g.noise);
+  if (NET.on) NET.room.send('shot', { g: gid, o: [mp.x, mp.y, mp.z], d: [fwd.x, fwd.y, fwd.z] });
   if (!st.mag) say(`${GUN_NAMES[gid]} sem balas. ${TOUCH ? 'RECARREGAR' : 'R'} para recarregar.`);
 }
 function hitScan(origin, dir, near, far, dmg, force) {
   // animals first (simple spheres), then the world
-  let bestA = null, bt = far;
+  let bestA = null, bt = far, bestP = null, head = false;
+  for (const rp of NET.remotes.values()) { // other players: a body and a head
+    if (rp.dead || rp.driving) continue;
+    for (const [cy, r, hd] of [[1.0, 0.38, false], [1.62, 0.2, true]]) {
+      const c = new THREE.Vector3(rp.x, rp.y + cy - 0.25 * rp.swimK, rp.z), oc = c.clone().sub(origin), t = oc.dot(dir);
+      if (t < near || t > bt) continue;
+      if (oc.lengthSq() - t * t < r * r) { bestP = rp; bt = t; head = hd; }
+    }
+  }
   for (const a of animals) {
     if (a.dead) continue;
     const dist0 = Math.hypot(a.x - origin.x, a.z - origin.z), drop = 0.5 * 9.8 * (dist0 / bulletSpeed) ** 2; // gravity pulls the bullet down
@@ -1803,6 +1834,10 @@ function hitScan(origin, dir, near, far, dmg, force) {
     if (car && car.body) { addDecal(hit, car.body.g); burst(hit.point, 6, PARTMAT.spark, 3); sfx.ping(); car.body.chassis.wakeUp(); const cb = car.body.chassis.position; car.body.chassis.applyImpulse(new CANNON.Vec3(dir.x * force * 0.3, 0, dir.z * force * 0.3), new CANNON.Vec3(hit.point.x - cb.x, hit.point.y - cb.y, hit.point.z - cb.z)); return; }
     addDecal(hit, null); burst(hit.point, 5, hit.object.material && hit.object.material.map === T.wood ? PARTMAT.wood : PARTMAT.dust); sfx.thudSoft();
     return;
+  }
+  if (bestP && !bestA) {
+    const p = origin.clone().addScaledVector(dir, bt); burst(p, 12, PARTMAT.blood, 3); sfx.hitFlesh();
+    NET.room && NET.room.send('hit', { t: bestP.id, dmg: dmg * (head ? 2 : 1), head }); state.hitMark = 0.25; state.hitKill = false; return;
   }
   if (bestA) { const p = origin.clone().addScaledVector(dir, bt); burst(p, 12, PARTMAT.blood, 3); hurtAnimal(bestA, dmg, dir); bestA.stagger = 0.35; bestA.x += dir.x * 0.25; bestA.z += dir.z * 0.25; state.hitMark = 0.25; state.hitKill = bestA.dead; sfx.hitFlesh(); }
 }
@@ -1855,9 +1890,10 @@ function makeAnimalMesh(kind) {
   }
   world.add(g); return { g, body, legs, head };
 }
+let animalSeq = 0;
 function spawnAnimal(kind, x, z) {
   const d = AN[kind], v = makeAnimalMesh(kind);
-  const a = { kind, x, z, yaw: rng() * 6.28, hp: d.hp, r: d.r, h: d.h, mode: 'idle', t: 1 + rng() * 3, tx: x, tz: z, phase: 0, speed: 0, dead: false, fallen: 0, cool: 0, heard: null, ...v };
+  const a = { id: ++animalSeq, kind, x, z, yaw: rng() * 6.28, hp: d.hp, r: d.r, h: d.h, mode: 'idle', t: 1 + rng() * 3, tx: x, tz: z, phase: 0, speed: 0, dead: false, fallen: 0, cool: 0, heard: null, ...v };
   animals.push(a); placeAnimal(a); return a;
 }
 function placeAnimal(a) { a.g.position.set(a.x, 0, a.z); a.g.rotation.y = a.yaw; }
@@ -1870,29 +1906,33 @@ function animalBlocked(x, z, r) {
 }
 function hurtAnimal(a, dmg) {
   if (a.dead) return;
+  if (NET.on && !NET.host) { NET.room.send('ahit', { i: a.id, dmg, x: state.x, z: state.z }); sfx.animalHurt(a.kind); return; } // the host decides
   a.hp -= dmg; sfx.animalHurt(a.kind);
   if (a.hp <= 0) { a.dead = true; a.mode = 'dead'; a.skinned = false; say(`Você abateu ${AN[a.kind].article}.`); return; }
   const s = state;
   if (a.kind === 'javali') { a.mode = 'charge'; a.t = 8; } else { a.mode = 'flee'; a.t = 6; a.tx = a.x + (a.x - s.x) * 3; a.tz = a.z + (a.z - s.z) * 3; }
 }
 function stepAnimals(dt) {
-  const s = state, maxN = LIGHT ? tune.animals_mobile : tune.animals;
+  if (NET.on && !NET.host) { followAnimals(dt); return; }
+  const s = state, maxN = (LIGHT ? tune.animals_mobile : tune.animals) * (NET.on ? Math.min(2, 1 + NET.remotes.size * 0.3) : 1);
+  const anchors = [s, ...NET.remotes.values()];
   // keep a herd around you: spawn out of sight, drop the far ones
   if (Math.floor(s.t * 60) % 120 === 0) {
-    for (let i = animals.length - 1; i >= 0; i--) { const a = animals[i]; if (Math.hypot(a.x - s.x, a.z - s.z) > 280) { world.remove(a.g); animals.splice(i, 1); } }
+    for (let i = animals.length - 1; i >= 0; i--) { const a = animals[i]; if (anchors.every(p => Math.hypot(a.x - p.x, a.z - p.z) > 280)) { world.remove(a.g); animals.splice(i, 1); } }
     if (animals.filter(a => !a.dead).length < maxN) {
-      const ang = rng() * 6.28, dist = 90 + rng() * 80, x = s.x + Math.cos(ang) * dist, z = s.z + Math.sin(ang) * dist;
+      const an = anchors[Math.floor(rng() * anchors.length)], ang = rng() * 6.28, dist = 90 + rng() * 80, x = an.x + Math.cos(ang) * dist, z = an.z + Math.sin(ang) * dist;
       if (freeSpot(x, z)) { const r = rng(); spawnAnimal(r < 0.4 ? 'coelho' : r < 0.78 ? 'cervo' : 'javali', x, z); }
     }
   }
   for (const a of animals) {
     const d = AN[a.kind];
     if (a.dead) { a.fallen = Math.min(1, a.fallen + dt * 2.5); a.body.rotation.z = a.fallen * Math.PI / 2; a.body.position.y = -a.fallen * a.h * 0.05; continue; }
-    const pd = Math.hypot(s.x - a.x, s.z - a.z);
+    let near = s, pd = Math.hypot(s.x - a.x, s.z - a.z);
+    for (const rp of NET.remotes.values()) { const d2 = Math.hypot(rp.x - a.x, rp.z - a.z); if (!rp.dead && d2 < pd) { pd = d2; near = rp; } }
     // senses: noise, and you, closer when you run, farther when you crouch still
     const loud = s.driving ? 60 : s.speedNow > 4.5 ? d.notice * 1.4 : s.speedNow > 0.5 ? d.notice : d.notice * 0.45;
     if (a.mode !== 'charge' && a.mode !== 'flee' && (pd < loud || a.heard)) {
-      const fx = a.heard ? a.heard.x : s.x, fz = a.heard ? a.heard.z : s.z;
+      const fx = a.heard ? a.heard.x : near.x, fz = a.heard ? a.heard.z : near.z;
       a.mode = 'flee'; a.t = 5 + rng() * 3; a.tx = a.x + (a.x - fx) * 4; a.tz = a.z + (a.z - fz) * 4; sfx.animalAlarm(a.kind, pd);
     }
     a.heard = null; a.t -= dt; a.cool -= dt;
@@ -1901,8 +1941,9 @@ function stepAnimals(dt) {
     else if (a.mode === 'walk') { speed = d.walk; if (a.t <= 0 || Math.hypot(a.tx - a.x, a.tz - a.z) < 1) { a.mode = 'idle'; a.t = 2 + rng() * 5; } }
     else if (a.mode === 'flee') { speed = d.run; if (a.t <= 0) { a.mode = 'idle'; a.t = 2; } }
     else if (a.mode === 'charge') {
-      speed = d.run; a.tx = s.x; a.tz = s.z;
-      if (pd < 1.5 && a.cool <= 0 && !s.driving) { s.health -= d.damage; a.cool = 1.3; say(`O javali te atacou! -${d.damage}`); sfx.thud(); sfx.hurt(); sfx.animalHurt('javali'); }
+      speed = d.run; a.tx = near.x; a.tz = near.z;
+      if (pd < 1.5 && a.cool <= 0 && near === s && !s.driving) { s.health -= d.damage; s.killedBy = 'Um javali'; a.cool = 1.3; say(`O javali te atacou! -${d.damage}`); sfx.thud(); sfx.hurt(); sfx.animalHurt('javali'); }
+      else if (pd < 1.5 && a.cool <= 0 && near !== s && NET.room) { NET.room.send('hit', { t: near.id, dmg: d.damage, src: 'Um javali' }); a.cool = 1.3; }
       if (a.t <= 0 || pd > 45) { a.mode = 'flee'; a.t = 4; }
     }
     if (speed > 0) {
@@ -1921,8 +1962,9 @@ function stepAnimals(dt) {
 }
 const ZERO_M = new THREE.Matrix4().makeScale(0, 0, 0), stumps = [], logs = [];
 const LEAFMATS = [MAT.leafA, MAT.leafB, MAT.leafC];
-function fellTree(rec, fromX, fromZ) {
+function fellTree(rec, fromX, fromZ, remote = false) {
   const s = state, inst = rec.inst; if (!inst) return;
+  if (!remote && NET.on) NET.room.send('fell', { key: treeKey(rec.x, rec.z), fx: fromX, fz: fromZ });
   // hide the standing tree and its collision
   inst.trunk[0].setMatrixAt(inst.trunk[1], ZERO_M); inst.trunk[0].instanceMatrix.needsUpdate = true;
   for (const [im, i] of inst.crowns) { im.setMatrixAt(i, ZERO_M); im.instanceMatrix.needsUpdate = true; }
@@ -2016,8 +2058,8 @@ function fillContainer(c, chance = 1) { return rollLoot(c.type, chance).concat(c
 
 // ---- Scenes ------------------------------------------------------------------------------
 let scene, state, runs = 0;
-function reset() {
-  seed = (Number(params.get('seed')) || CONFIG.seed) + runs * 101;
+function reset(keepWorld = false) {
+  seed = (Number(params.get('seed')) || CONFIG.seed) + runs * 101 + (NET.on ? (Date.now() & 0xffff) : 0);
   const sh = params.get('hour');
   state = {
     t: 0, score: 0, gained: '',
@@ -2027,12 +2069,15 @@ function reset() {
     inv: [{ id: 'agua', n: 1 }, { id: 'cereal', n: 1 }], extraSlots: 0, craftOpen: false, skin: null, carcass: null, gun: null, aiming: false, reload: null, cool: 0, kick: 0, flashT: 0, pickAnim: 0, guns: Object.fromEntries(Object.keys(CONFIG.guns).map(g => [g, { has: false, mag: 0 }])), driving: null, hold: null, act: null, y: 0, air: false, airVy: 0, lookT: 9, found: ['Santa Luzia'], chop: null, tree: null, flash: false, search: null, aim: null, msgs: [],
     walked: 0, bob: 0, heart: 0, face: 0, crouch: 0, speedNow: 0, searched: 0, eaten: 0, days: 0, dead: false,
   };
-  for (const c of containers) { c.items = fillContainer(c); c.searched = false; c.refillAt = 0; }
-  clearFires(); for (const d of decals) d.parent && d.parent.remove(d); decals.length = 0;
-  for (const a of animals) world.remove(a.g); animals.length = 0;
+  if (!keepWorld) {
+    for (const c of containers) { c.items = fillContainer(c); c.searched = false; c.refillAt = 0; }
+    clearFires(); for (const d of decals) d.parent && d.parent.remove(d); decals.length = 0;
+    for (const a of animals) world.remove(a.g); animals.length = 0;
+  }
+  if (NET.on) { const sp = SPAWNS[Math.floor(rng() * SPAWNS.length)]; state.x = state.px = sp[0]; state.z = state.pz = sp[1]; state.hour = state.startHour = NET.hour; }
   if (playerBody.world !== phys) phys.addBody(playerBody);
   playerBody.position.set(state.x, 0.05, state.z); playerBody.velocity.setZero();
-  for (const c of cars) c.fuel = Math.floor(rng() * tune.car_start_fuel_max);
+  if (!keepWorld && !NET.on) for (const c of cars) c.fuel = Math.floor(rng() * tune.car_start_fuel_max);
   updateChunks();
   say('Você acordou na estrada. A cidade parece vazia.');
   say('Procure comida e água nas casas antes que acabem.');
@@ -2132,6 +2177,7 @@ function take(c) {
   while (c.items.length && addItem(c.items[0])) { const id = c.items.shift(); got[id] = (got[id] || 0) + 1; }
   for (const id in got) say('Pegou: ' + (got[id] > 1 ? got[id] + ' × ' : '') + ITEMS[id].name);
   if (Object.keys(got).length) state.pickAnim = 0.7;
+  netContItems(c);
   if (c.items.length) say(`Mochila cheia. Ficaram ${c.items.length} item(ns) na ${c.name}.`);
   if (before && before !== c.items.length) sfx.pick();
 }
@@ -2311,17 +2357,19 @@ const scenes = {
     update(dt) {
       state.t += dt; state.yaw = 0.35 * Math.sin(state.t * 0.08); state.pitch = -0.04;
       if (pressed('Enter') || pressed('Space')) { reset(); scene = 'play'; }
+      if (pressed('KeyO')) goOnline();
+      if (pressed('KeyA') && NET.sdk) openParty();
     },
-    draw() {
+    draw(bare) {
       placeCamera(); renderScene(lighting(17.6));
       ctx.clearRect(0, 0, W, H);
       const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(0,0,0,0.55)'); g.addColorStop(0.5, 'rgba(0,0,0,0.15)'); g.addColorStop(1, 'rgba(0,0,0,0.8)');
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
       shadowText(TITLE, W / 2, 170, 76, '#e6e0d2', 'center', '300');
       shadowText('Quantos dias você aguenta?', W / 2, 235, 24, '#b9b2a2');
-      CONTROLS.forEach((c, i) => shadowText(c, W / 2, H - 200 + i * 34, 19, '#c9c4b8'));
+      CONTROLS.forEach((c, i) => shadowText(c, W / 2, H - 245 + i * 26, 15, '#c9c4b8'));
       const best = bestRun(); if (best) shadowText('Seu recorde: ' + best, W / 2, 290, 18, '#9c9688');
-      shadowText(TOUCH ? 'Toque para começar' : 'Clique ou Enter para começar', W / 2, H - 70, 24, '#fff', 'center', '600');
+      if (bare !== true) drawTitleButtons();
     },
   },
   play: {
@@ -2392,11 +2440,12 @@ const scenes = {
       if (!dmg && s.hunger > tune.regen_threshold && s.thirst > tune.regen_threshold) s.health = Math.min(100, s.health + tune.regen_rate / 60 * dt);
       if (s.health < 30) { s.heart -= dt; if (s.heart <= 0) { s.heart = 0.5 + s.health / 30; sfx.heart(); } }
       if (s.health <= 0) {
-        engineSound(null, 0, 0); s.health = 0; s.dead = true; s.gained = 'Você sobreviveu ' + survived(); saveBest(); scene = 'over';
+        engineSound(null, 0, 0); s.health = 0; s.dead = true; s.gained = (s.killedBy ? `${s.killedBy} te matou. ` : '') + 'Você sobreviveu ' + survived(); saveBest(); scene = 'over';
+        if (NET.on) netDied();
         if (document.exitPointerLock) document.exitPointerLock(); events.push({ dead: true }); return;
       }
       // refill searched furniture over the days
-      if (Math.floor(s.t * 60) % 60 === 0) for (const c of containers) {
+      if (!NET.on && Math.floor(s.t * 60) % 60 === 0) for (const c of containers) {
         if (c.searched && !c.items.length) {
           if (!c.refillAt) c.refillAt = s.hour + 24 * tune.refill_days * (0.7 + rng() * 0.6);
           else if (s.hour >= c.refillAt) { c.items = rollLoot(c.type, tune.refill_chance); c.searched = false; c.refillAt = 0; }
@@ -2410,7 +2459,9 @@ const scenes = {
         if (Math.hypot(f.x - s.x, f.z - s.z) < 25) say('A fogueira apagou.');
       }
       if (pressed('KeyF')) { s.flash = !s.flash; sfx.click(); }
-      stepGuns(dt); stepParticles(dt); stepAnimals(dt); stepLogs(dt); stepAmbience(dt); if (s.pickAnim > 0) s.pickAnim -= dt;
+      stepGuns(dt); stepParticles(dt); stepAnimals(dt); stepLogs(dt); stepAmbience(dt); netSend(); voiceUpdate(); drawRemotes(dt);
+      if (s.hurtFlash > 0) s.hurtFlash -= dt;
+      for (const c of cars) if (c.remoteOn && s.t - (c.remoteT || 0) > 1.5) setCarRemote(c, false); if (s.pickAnim > 0) s.pickAnim -= dt;
       if (!s.driving && s.speedNow > 4.5 && Math.floor(s.t * 60) % 20 === 0) makeNoise(s.x, s.z, 22);
       // search
       placeCamera();
@@ -2422,7 +2473,8 @@ const scenes = {
           if (s.search.p * 6 > s.search.n) { s.search.n++; sfx.rustle(); }
           if (s.search.p >= 1) {
             c.searched = true; s.search = null; s.searched++;
-            if (!c.items.length) { say(`Nada na ${c.name}.`); sfx.empty(); } else take(c);
+            if (NET.on && c.id) netClaim(c);
+            else if (!c.items.length) { say(`Nada na ${c.name}.`); sfx.empty(); } else take(c);
             events.push({ searched: c.type });
           }
         } else if (pressed('KeyE')) { if (c.items.length) take(c); else { say(`A ${c.name} está vazia.`); sfx.empty(); } }
@@ -2440,7 +2492,7 @@ const scenes = {
         s.skin.p += dt / tune.skin_time; if (s.skin.p * 6 > s.skin.n) { s.skin.n++; sfx.rustle(); }
         s.face = lerpAngle(s.face, Math.atan2(-(carc.x - s.x), -(carc.z - s.z)), Math.min(1, 10 * dt));
         if (s.skin.p >= 1) {
-          carc.skinned = true; s.skin = null; let got = 0;
+          carc.skinned = true; s.skin = null; let got = 0; if (NET.on && !NET.host) NET.room.send('askin', { i: carc.id });
           for (let i = 0; i < AN[carc.kind].meat; i++) if (addItem('carne_crua')) got++;
           say(got ? `Pegou: ${got} × Carne crua` : 'Mochila cheia.'); sfx.pick(); s.pickAnim = 0.7;
           setTimeout(() => { world.remove(carc.g); const i = animals.indexOf(carc); if (i >= 0) animals.splice(i, 1); }, 0);
@@ -2492,8 +2544,17 @@ const scenes = {
       shadowText(TOUCH ? 'Toque para continuar' : 'Clique, P ou Enter para continuar', W / 2, H / 2 + 30, 22, '#ccc');
     },
   },
+  connecting: {
+    update() { if (!NET.joining && (pressed('Enter') || pressed('Escape') || pressed('KeyP'))) scene = 'title'; },
+    draw() {
+      scenes.title.draw(true);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, H / 2 - 70, W, 140);
+      shadowText(NET.status || 'Conectando…', W / 2, H / 2 - 12, 24, '#fff', 'center', '600');
+      if (!NET.joining) shadowText(TOUCH ? 'Toque para voltar' : 'Enter ou clique para voltar', W / 2, H / 2 + 30, 17, '#ccc');
+    },
+  },
   over: {
-    update() { if (pressed('KeyR') || pressed('Enter')) { runs++; reset(); scene = 'play'; } },
+    update() { if (pressed('KeyR') || pressed('Enter')) { runs++; reset(NET.on); scene = 'play'; } },
     draw() {
       placeCamera(1); renderScene(lighting(state.hour % 24));
       ctx.clearRect(0, 0, W, H); ctx.fillStyle = 'rgba(40,0,0,0.6)'; ctx.fillRect(0, 0, W, H);
@@ -2644,6 +2705,8 @@ function drawHud(day) {
   ctx.fillStyle = s.aim ? 'rgba(255,245,220,0.95)' : 'rgba(255,255,255,0.55)';
   ctx.beginPath(); ctx.arc(W / 2, H / 2, s.aim ? 3 : 2, 0, Math.PI * 2); ctx.fill();
   drawCompass();
+  if (s.hurtFlash > 0) { ctx.fillStyle = `rgba(160,0,0,${s.hurtFlash})`; ctx.fillRect(0, 0, W, H); }
+  if (NET.on) shadowText(`Online · ${NET.remotes.size + 1} jogador(es)${NET.host ? ' · anfitrião' : ''}`, TOUCH ? W / 2 : 28, TOUCH ? 72 : 88, 14, '#ffcf8a', TOUCH ? 'center' : 'left', '600');
   // clock
   shadowText(clockStr(), 28, 34, 22, '#e8e2d4', 'left', '600');
   shadowText(day < 0.3 ? (s.flash ? 'Noite  ·  lanterna ligada' : TOUCH ? 'Noite  ·  ligue a LANTERNA' : 'Noite  ·  F liga a lanterna') : '', 28, 62, 15, '#b8b2a4', 'left');
@@ -2797,6 +2860,285 @@ function recipeIcon(id, x, y, s) {
   } else icon(id, x, y, s);
 }
 
+// ---- Online: PlayDrop rooms, other players, shared world ------------------------------------------
+// Solo stays as it was. Online, a PlayDrop-hosted room (server/index.mjs) relays everyone's state:
+// players are drawn from 10-a-second snapshots, furniture is claimed so loot is never duplicated,
+// fires, felled trees, cars, the backpacks of the dead and the time of day are shared, and one
+// player (the host) runs the animals for everybody. Everyone can shoot everyone.
+const SPAWNS = [[0, 118], [0, -120], [-14, 40], [14, -30], [212, -100], [-196, 70], [0, 200], [120, -55]];
+async function bootSdk() {
+  if (window.PLAYDROP_SHIM) NET.sdk = window.PLAYDROP_SHIM; // local tests
+  else if (/^https?:/.test(location.protocol) && params.get('nosdk') !== '1') {
+    await new Promise(res => { const sc = document.createElement('script'); sc.src = 'https://assets.playdrop.ai/sdk/playdrop.js'; sc.onload = res; sc.onerror = res; document.head.appendChild(sc); setTimeout(res, 6000); });
+    if (window.playdrop && playdrop.init) try { NET.sdk = await playdrop.init(); } catch (e) { NET.sdk = null; }
+  }
+  const sdk = NET.sdk; if (!sdk) return;
+  try {
+    const host = sdk.host;
+    const audioOk = a => { if (audio) (a ? audio.ac.resume() : audio.ac.suspend()).catch(() => {}); };
+    audioOk(host.audioAllowed); host.onAudioAllowedChange && host.onAudioAllowedChange(audioOk);
+    host.onPause && host.onPause(() => { if (!NET.on && scene === 'play') scene = 'pause'; });
+    host.onResume && host.onResume(() => { last = clock.now(); });
+    sdk.social && sdk.social.onPartyChange && sdk.social.onPartyChange(p => {
+      NET.party = p;
+      if (p && p.launch && (p.launch.status === 'joining' || p.launch.status === 'ready') && !NET.on && !NET.joining) goOnline();
+    });
+  } catch (e) { /* optional host features */ }
+}
+function sdkReady() { try { NET.sdk && NET.sdk.host && NET.sdk.host.ready(); } catch (e) { /* not on PlayDrop */ } }
+function openParty() { try { NET.sdk.social.openParty({ mode: 'online' }); } catch (e) { say('Convite indisponível aqui.'); } }
+
+// title screen buttons
+function titleButtons() {
+  const bw = TOUCH ? 230 : 250, bh = TOUCH ? 52 : 50, y = H - (TOUCH ? 92 : 100), gap = 18, n = NET.sdk ? 3 : 2, x0 = W / 2 - (n * bw + (n - 1) * gap) / 2;
+  const list = [{ id: 'solo', label: 'Jogar sozinho', key: 'Enter' }, { id: 'online', label: NET.sdk ? 'Jogar online' : 'Online (só no PlayDrop)', key: 'O', off: !NET.sdk }];
+  if (NET.sdk) list.push({ id: 'party', label: 'Chamar amigos', key: 'A' });
+  return list.map((b, i) => ({ ...b, x: x0 + i * (bw + gap), y, w: bw, h: bh }));
+}
+function drawTitleButtons() {
+  for (const b of titleButtons()) {
+    ctx.fillStyle = b.off ? 'rgba(30,30,28,0.55)' : b.id === 'online' ? 'rgba(160,60,40,0.85)' : 'rgba(20,20,18,0.75)';
+    rr(b.x, b.y, b.w, b.h, 10); ctx.fill(); ctx.strokeStyle = b.off ? 'rgba(200,190,170,0.25)' : 'rgba(240,230,210,0.7)'; ctx.lineWidth = 1.5; ctx.stroke();
+    shadowText(b.label, b.x + b.w / 2, b.y + b.h / 2 - (TOUCH ? 0 : 6), TOUCH ? 18 : 19, b.off ? '#9c9688' : '#fff', 'center', '600');
+    if (!TOUCH) text(b.key, b.x + b.w / 2, b.y + b.h - 10, 11, '#bdb5a5');
+  }
+  if (NET.status && scene === 'title') shadowText(NET.status, W / 2, H - 120, 15, '#ffcf8a');
+}
+function titleClick(p) {
+  const b = titleButtons().find(b => p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h);
+  if (!b) return false;
+  if (b.id === 'solo') { reset(); scene = 'play'; return true; }
+  if (b.id === 'online') { if (!b.off) goOnline(); else NET.status = 'O modo online funciona quando o jogo é aberto no PlayDrop.'; return false; }
+  if (b.id === 'party') { openParty(); return false; }
+  return false;
+}
+
+async function goOnline() {
+  if (!NET.sdk || NET.joining || NET.on) return;
+  NET.joining = true; NET.status = 'Conectando ao servidor…'; scene = 'connecting';
+  try {
+    const room = await NET.sdk.multiplayer.join('game', {});
+    NET.room = room; wireRoom(room);
+  } catch (e) {
+    NET.joining = false; const m = String(e && e.message || e);
+    if (m.includes('authentication_required')) {
+      NET.status = 'Entre na sua conta PlayDrop para jogar online.';
+      try { NET.sdk.me.onAuthChange(() => { if (NET.sdk.me.isLoggedIn && scene === 'connecting') goOnline(); }); } catch (er) { /* host without auth events */ }
+    } else NET.status = 'Não deu para conectar (' + m.slice(0, 60) + ').';
+  }
+}
+function wireRoom(room) {
+  const on = (t, f) => room.onMessage(t, m => { try { f(m || {}); } catch (e) { console.error('net', t, e); } });
+  on('welcome', w => {
+    NET.me = w.you || room.sessionId; NET.host = w.host === NET.me; NET.hour = w.hour; NET.on = true; NET.joining = false; NET.status = '';
+    NET.conts = w.conts || {}; NET.carStates = {};
+    runs++; reset(); // a fresh survivor in the shared world
+    for (const c of cars) c.fuel = Math.floor(vr(c.chassis.position.x * 7.1 + c.chassis.position.z * 3.3) * tune.car_start_fuel_max); // the same on every game
+    for (const cid in NET.conts) applyContState(cid, NET.conts[cid]);
+    for (const f of w.fires || []) placeFireAt(f.x, f.z, f.outAt);
+    for (const k of w.felled || []) fellByKey(k, 0, 0, true);
+    for (const b of w.bags || []) addBag(b);
+    for (const cid in w.cars || {}) onCar({ cid, ...w.cars[cid] });
+    if (!NET.host) applyAnimals(w.animals || []);
+    scene = 'play'; say(`Online: ${w.count} jogador(es) na sala. Todos contra todos.`);
+    if (!TOUCH && canvas.requestPointerLock) try { canvas.requestPointerLock(); } catch (e) { /* needs a click */ }
+  });
+  on('snap', onSnap);
+  on('joined', m => say(`${m.name} entrou no jogo.`));
+  on('left', m => { say(`${m.name} saiu.`); removeRemote(m.id); });
+  on('host', m => { NET.host = m.id === NET.me; if (NET.host) for (const a of animals) a.t = 0.5; });
+  on('shot', remoteShot);
+  on('hurt', m => {
+    const s = state; if (s.dead || scene !== 'play') return;
+    s.health -= m.dmg; s.killedBy = m.by; sfx.hurt(); s.hurtFlash = 0.4; s.shake = Math.min(1, (s.shake || 0) + 0.5);
+    if (m.head) say(`Tiro na cabeça! (${m.by})`);
+  });
+  on('kill', m => say(m.killer ? `${m.killer} matou ${m.victim}` : `${m.victim} morreu`));
+  on('cont', m => applyContState(m.cid, m));
+  on('fire', f => placeFireAt(f.x, f.z, f.outAt));
+  on('fell', m => fellByKey(m.key, m.fx, m.fz, false));
+  on('car', onCar);
+  on('carOk', m => { if (!m.ok && state.driving && state.driving.id === m.cid) { leaveCar(); say('Outro jogador pegou este carro primeiro.'); } });
+  on('bag', addBag);
+  on('animals', m => { if (!NET.host) applyAnimals(m.a || []); });
+  on('ahit', m => { const a = animals.find(x => x.id === m.i); if (a && !a.dead) { a.heard = { x: m.x, z: m.z, t: 3 }; hurtAnimalHost(a, m.dmg); } });
+  on('askin', m => { const a = animals.find(x => x.id === m.i); if (a) { a.skinned = true; world.remove(a.g); animals.splice(animals.indexOf(a), 1); } });
+  setTimeout(() => room.send('hello', {}), 0); // ask for the world now that we listen
+  room.onLeave(() => {
+    NET.on = false; NET.room = null; NET.joining = false;
+    for (const id of [...NET.remotes.keys()]) removeRemote(id);
+    if (scene === 'play' || scene === 'pause') { say('Desconectado do servidor. Continuando sozinho.'); }
+  });
+}
+function hurtAnimalHost(a, dmg) { const was = NET.on; NET.on = false; hurtAnimal(a, dmg); NET.on = was; }
+
+// what we tell the room, 10 times a second
+function netSend() {
+  if (!NET.on || !NET.room) return;
+  const s = state; if (++NET.sendT % 6 !== 0) return;
+  NET.room.send('p', {
+    x: +s.x.toFixed(2), y: +(s.y || 0).toFixed(2), z: +s.z.toFixed(2), f: +s.face.toFixed(2), yw: +s.yaw.toFixed(2), pt: +s.pitch.toFixed(2),
+    sp: +(s.speedNow || 0).toFixed(1), sw: +(s.swimK || 0).toFixed(2), cr: +(s.crouch || 0).toFixed(2), g: s.gun || '', a: !!s.aiming,
+    ch: s.chop ? +s.chop.swing.toFixed(2) : -1, hd: s.hold ? s.hold.kind : '', dr: s.driving ? s.driving.id : '', hp: Math.round(s.health), dead: !!s.dead || scene === 'over',
+  });
+  if (s.driving) netSendCar(s.driving, false);
+  if (NET.host && NET.sendT % 12 === 0) NET.room.send('animals', { a: animals.filter(a => !a.skinned).map(a => ({ i: a.id, k: a.kind, x: +a.x.toFixed(2), z: +a.z.toFixed(2), y: +a.yaw.toFixed(2), sp: +(a.speed || 0).toFixed(1), d: a.dead ? 1 : 0, m: a.mode === 'idle' ? 0 : 1 })) });
+}
+function netSendCar(c, leave) {
+  const p = c.chassis.position, q = c.chassis.quaternion, v = c.chassis.velocity;
+  NET.room && NET.room.send('car', { cid: c.id, p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], v: [v.x, v.y, v.z], f: c.fuel, leave });
+}
+function netClaim(c) { c.pending = true; NET.room.send('claim', { cid: c.id, items: c.items }); }
+function netContItems(c) { if (NET.on && c && c.id) NET.room.send('contItems', { cid: c.id, items: c.items }); }
+function applyContState(cid, m) {
+  NET.conts[cid] = { items: (m.items || []).slice(), searched: !!m.searched };
+  const c = containers.find(x => x.id === cid); if (!c) return;
+  c.items = (m.items || []).slice(); c.searched = !!m.searched;
+  if (c.pending && m.yours) { c.pending = false; if (!c.items.length) { say(`Nada na ${c.name}.`); sfx.empty(); } else take(c); }
+}
+function netDied() {
+  const s = state, items = [];
+  for (const it of s.inv) for (let i = 0; i < it.n; i++) items.push(it.id);
+  for (const g in s.guns) if (s.guns[g].has) { items.push('arma_' + g); for (let i = 0; i < s.guns[g].mag; i++) items.push('bala_' + g); }
+  NET.room.send('died', { x: s.x, z: s.z, items, by: s.killedBy || '' });
+  if (s.driving) leaveCar();
+}
+// the backpack a dead player leaves: anyone can search it
+function addBag(b) {
+  if (containers.some(c => c.id === b.id)) return;
+  const g = new THREE.Group(); g.position.set(b.x, 0, b.z); world.add(g);
+  const m1 = mesh(boxGeo(0.45, 0.32, 0.3, 1), new THREE.MeshStandardMaterial({ color: 0x5b4a33, roughness: 0.9 }), 0, 0.16, 0, g); m1.rotation.y = 0.4;
+  const m2 = mesh(boxGeo(0.36, 0.12, 0.08, 1), new THREE.MeshStandardMaterial({ color: 0x4a3c28, roughness: 0.9 }), 0.05, 0.1, 0.18, g); m2.rotation.y = 0.4;
+  const c = { type: 'caixa', name: 'mochila de ' + b.name, items: [], searched: false, refillAt: 0, group: g, id: b.id, bag: true };
+  g.userData.container = c; containers.push(c); globalSolids.push(m1); nearKey = '';
+  const known = NET.conts[b.id]; if (known) { c.items = known.items.slice(); c.searched = known.searched; }
+}
+function fellByKey(key, fx, fz, silent) {
+  felled.add(key);
+  const rec = trees.find(t => treeKey(t.x, t.z) === key);
+  if (!rec) return;
+  if (silent) { // already down when you arrived: no fall, just the stump
+    const inst = rec.inst; if (!inst) return;
+    inst.trunk[0].setMatrixAt(inst.trunk[1], ZERO_M); inst.trunk[0].instanceMatrix.needsUpdate = true;
+    for (const [im, i] of inst.crowns) { im.setMatrixAt(i, ZERO_M); im.instanceMatrix.needsUpdate = true; }
+    const b = rec.box; for (let i = Math.floor(b.x0 / GRID); i <= Math.floor(b.x1 / GRID); i++) for (let j = Math.floor(b.z0 / GRID); j <= Math.floor(b.z1 / GRID); j++) { const l = grid.get(gkey(i, j)); if (l) { const k = l.indexOf(b); if (k >= 0) l.splice(k, 1); } }
+    if (b.body && liveBoxes.has(b)) { phys.removeBody(b.body); liveBoxes.delete(b); }
+    trees.splice(trees.indexOf(rec), 1); stumps.push(mesh(new THREE.CylinderGeometry(0.24, 0.32, 0.45, 8), MAT.bark, rec.x, 0.22, rec.z));
+  } else fellTree(rec, fx, fz, true);
+}
+
+// cars someone else drives: they follow that player's game
+function setCarRemote(c, on) {
+  if (!!c.remoteOn === on) return; c.remoteOn = on;
+  c.chassis.type = on ? CANNON.Body.KINEMATIC : CANNON.Body.DYNAMIC; c.chassis.updateMassProperties(); c.chassis.wakeUp();
+}
+function applyCarState(c, m) {
+  if (!m.p) return;
+  c.chassis.position.set(m.p[0], m.p[1], m.p[2]); if (m.q) c.chassis.quaternion.set(m.q[0], m.q[1], m.q[2], m.q[3]);
+  if (m.v) c.chassis.velocity.set(m.v[0], m.v[1], m.v[2]); if (m.f !== undefined) c.fuel = m.f;
+}
+function onCar(m) {
+  NET.carStates[m.cid] = m;
+  const c = cars.find(x => x.id === m.cid); if (!c || c === state.driving) return;
+  applyCarState(c, m);
+  if (m.leave || !m.drv) { setCarRemote(c, false); c.chassis.velocity.setZero(); NET.drivers.delete(m.cid); }
+  else { setCarRemote(c, true); c.remoteT = state.t; }
+}
+
+// other players
+const LOOKS = [0x4b5340, 0x5a3d3a, 0x3d4a5a, 0x5a5236, 0x3f3f3f, 0x6a4a2a, 0x2f4a3f, 0x4a3f5a];
+function nameTag(name) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
+  g.font = 'bold 30px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(0, 10, 256, 44);
+  g.fillStyle = '#f2ead8'; g.fillText(name.slice(0, 16), 128, 33);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true }));
+  sp.scale.set(1.3, 0.33, 1); sp.renderOrder = 10; return sp;
+}
+function makeRemote(id, name) {
+  let h = 0; for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  const fig = makeSurvivor({ jacket: LOOKS[Math.abs(h) % LOOKS.length], cap: [0x6b5a3f, 0x2a2a2a, 0x7a2a22, 0x3a4a2a][Math.abs(h >> 3) % 4] });
+  const holder = new THREE.Group(); holder.rotation.x = -Math.PI / 2; fig.hand.add(holder);
+  const guns = {}; for (const gid in GUNS) { guns[gid] = makeGunMesh(gid); guns[gid].visible = false; holder.add(guns[gid]); }
+  const axe = makeAxe(); fig.hand.add(axe);
+  const tag = nameTag(name); world.add(tag);
+  const rp = { id, name, fig, guns, axe, tag, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, face: 0, tface: 0, yaw: 0, pitch: 0, speedNow: 0, bob: 0, crouch: 0, swimK: 0,
+    gun: null, aiming: false, chop: null, hold: null, driving: false, dead: false, t: 0, kick: 0, fresh: true, deadT: 0 };
+  NET.remotes.set(id, rp); return rp;
+}
+function removeRemote(id) {
+  const rp = NET.remotes.get(id); if (!rp) return;
+  world.remove(rp.fig.root); world.remove(rp.tag); NET.remotes.delete(id);
+}
+function onSnap(m) {
+  NET.hour = m.h; NET.host = m.host === NET.me;
+  if (NET.on && Math.abs(state.hour - m.h) > 0.05) state.hour = m.h;
+  const seen = new Set(); NET.drivers.clear();
+  for (const p of m.p || []) {
+    if (p.dr) NET.drivers.add(p.dr);
+    if (p.id === NET.me) continue;
+    seen.add(p.id);
+    const rp = NET.remotes.get(p.id) || makeRemote(p.id, p.n || 'Jogador');
+    rp.userId = p.u; rp.tx = p.x; rp.ty = p.y || 0; rp.tz = p.z; rp.tface = p.f || 0; rp.yaw = p.yw || 0; rp.pitch = p.pt || 0;
+    rp.speedNow = p.sp || 0; rp.swimT = p.sw || 0; rp.crouchT = p.cr || 0; rp.gun = p.g || null; rp.aiming = !!p.a;
+    rp.chop = p.ch >= 0 ? { swing: p.ch } : null; rp.hold = p.hd ? { kind: p.hd } : null; rp.driving = !!p.dr; rp.dead = !!p.dead;
+    if (rp.fresh) { rp.x = rp.tx; rp.y = rp.ty; rp.z = rp.tz; rp.face = rp.tface; rp.fresh = false; }
+  }
+  for (const id of [...NET.remotes.keys()]) if (!seen.has(id)) removeRemote(id);
+}
+function drawRemotes(dt) {
+  const k = Math.min(1, dt * 12);
+  for (const rp of NET.remotes.values()) {
+    rp.x += (rp.tx - rp.x) * k; rp.y += (rp.ty - rp.y) * k; rp.z += (rp.tz - rp.z) * k; rp.face = lerpAngle(rp.face, rp.tface, k);
+    rp.crouch += ((rp.crouchT || 0) - rp.crouch) * k; rp.swimK += ((rp.swimT || 0) - rp.swimK) * k; rp.t += dt; rp.bob += rp.speedNow * dt * 3.2;
+    rp.kick = Math.max(0, rp.kick - dt * 8); rp.search = rp.crouch > 0.5 && !rp.chop;
+    const vis = !rp.driving; rp.fig.root.visible = vis; rp.tag.visible = vis && !rp.dead;
+    if (!vis) continue;
+    poseFigure(rp.fig, rp, rp.x, rp.z, rp.axe, rp.guns);
+    if (rp.dead) { rp.fig.root.rotation.x = -Math.PI / 2; rp.fig.root.position.y = 0.25; }
+    rp.tag.position.set(rp.x, rp.y + 2.15 - 0.9 * rp.swimK, rp.z);
+  }
+}
+function remoteShot(m) {
+  const rp = NET.remotes.get(m.id), o = m.o || [0, 0, 0], d = Math.hypot(o[0] - state.x, o[2] - state.z);
+  if (rp) rp.kick = 1;
+  muzzleLight.position.set(o[0], o[1], o[2]); muzzleLight.intensity = 6; flashMesh.position.set(o[0], o[1], o[2]); flashMesh.visible = true; state.flashT = 0.05;
+  VOLK = Math.max(0.05, 1 - d / 450); sfx.gun(m.g); VOLK = 1; // farther shots are quieter
+  makeNoise(o[0], o[2], (GUNS[m.g] || GUNS.pistola).noise);
+}
+// animals on the other players' games: copies that follow the host
+function applyAnimals(list) {
+  const seen = new Set();
+  for (const r of list) {
+    seen.add(r.i);
+    let a = animals.find(x => x.id === r.i);
+    if (!a) { a = spawnAnimal(r.k, r.x, r.z); a.id = r.i; }
+    a.nx = r.x; a.nz = r.z; a.nyaw = r.y; a.speed = r.sp || 0; a.mode = r.m ? 'walk' : 'idle';
+    if (r.d && !a.dead) { a.dead = true; a.mode = 'dead'; }
+  }
+  for (let i = animals.length - 1; i >= 0; i--) if (!seen.has(animals[i].id)) { world.remove(animals[i].g); animals.splice(i, 1); }
+}
+function followAnimals(dt) {
+  const k = Math.min(1, dt * 8);
+  for (const a of animals) {
+    if (a.nx !== undefined) { a.x += (a.nx - a.x) * k; a.z += (a.nz - a.z) * k; a.yaw = lerpAngle(a.yaw, a.nyaw, k); }
+    if (a.dead) { a.fallen = Math.min(1, a.fallen + dt * 2.5); a.body.rotation.z = a.fallen * Math.PI / 2; placeAnimal(a); continue; }
+    a.phase += a.speed * dt * (a.kind === 'coelho' ? 9 : 3.2); placeAnimal(a);
+    const sw = Math.sin(a.phase) * Math.min(1, a.speed / 2) * 0.6; a.legs.forEach((l, i) => l.rotation.x = (i === 0 || i === 3 ? sw : -sw));
+  }
+}
+// voice: tell PlayDrop where everyone is, for volume and direction
+function voiceUpdate() {
+  if (!NET.on || !NET.sdk || !NET.sdk.multiplayer || !NET.sdk.multiplayer.voice) return;
+  if (Math.floor(state.t * 60) % 30 !== 0) return;
+  const f = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+  try {
+    NET.sdk.multiplayer.voice.updateSpatialState({
+      listener: { position: { x: state.x, y: (state.y || 0) + 1.6, z: state.z }, forward: { x: f.x, y: f.y, z: f.z }, up: { x: 0, y: 1, z: 0 } },
+      speakers: [...NET.remotes.values()].filter(r => r.userId).map(r => ({ userId: r.userId, position: { x: r.x, y: r.y + 1.6, z: r.z } })),
+    });
+  } catch (e) { /* voice is optional */ }
+}
+
 // ---- Loop --------------------------------------------------------------------------------
 function step() {
   if (pressed('KeyM')) { setMuted(!muted); hit.delete('KeyM'); }
@@ -2822,6 +3164,7 @@ window.game = {
   get events() { return events; },
   houses, containers, trees, fires, RECIPES, cars, props, doors, pumps, playerBody, phys,
   get size() { return [W, H]; },
+  NET, goOnline, titleButtons,
   logs, lakes,
   animals, GUNS, camera,
   teleport(x, z, yaw) { playerBody.position.set(x, 0.05, z); playerBody.velocity.setZero(); state.x = state.px = x; state.z = state.pz = z; if (yaw !== undefined) state.yaw = yaw; updateChunks(); },
@@ -2836,6 +3179,7 @@ window.game = {
 
 reset();
 scene = params.get('scene') || 'title';
+bootSdk().then(() => { drawFrame(); sdkReady(); if (params.get('online') === '1') goOnline(); });
 last = clock.now();
 if (params.get('manual') === '1') drawFrame();
 else { requestAnimationFrame(frame); setInterval(timer, 50); }
