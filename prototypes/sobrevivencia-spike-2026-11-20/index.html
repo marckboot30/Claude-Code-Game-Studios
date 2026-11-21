@@ -423,6 +423,7 @@ const SIDING = [[150, 158, 160], [176, 166, 140], [120, 132, 112], [184, 180, 17
   .map((c, i) => M(siding(c[0], c[1], c[2], 40 + i * 10)));
 const CAR = [0x5d6a70, 0x7a3b30, 0x8a8a82, 0x3d4a3a, 0x6e5a3e].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.55, metalness: 0.4 }));
 
+const PRODUCTS = [0.02, 0.1, 0.17, 0.33, 0.55, 0.62, 0.8].map(h => new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(h, 0.25, 0.35), roughness: 0.8 })); // shelf goods
 const boxes = [];      // collision: axis-aligned footprints {x0,x1,z0,z1}
 const solids = [];     // meshes the aim ray can hit
 const containers = []; // searchable furniture
@@ -469,7 +470,7 @@ function furniture(type, x, z, rot) {
     for (let i = 0; i < 4; i++) {
       part(w, 0.03, d, MAT.metal, 0, 0.1 + i * 0.48, 0);
       for (let j = 0; j < 7; j++) if (vr(x * 3 + z * 7 + i * 11 + j) > 0.45) {
-        const c = new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(vr(i * 5 + j * 3 + x), 0.25, 0.35), roughness: 0.8 });
+        const c = PRODUCTS[Math.floor(vr(i * 5 + j * 3 + x) * PRODUCTS.length)];
         part(0.22 + vr(j + i) * 0.1, 0.22 + vr(j * 2 + i) * 0.12, 0.3, c, -1.2 + j * 0.4, 0.13 + i * 0.48, 0.05);
       }
     }
@@ -572,7 +573,6 @@ function car(x, z, rot, mi) {
 }
 
 const houses = [], trees = [];
-let treeTrunks = null; // the instanced trunks: the camera stops in front of them
 const BOUND = { x0: -295, x1: 295, z0: -295, z1: 295 };
 const lakes = [];  // collision circles {x, z, r}
 // Named places: on the compass, on the road signs, and announced the first time you arrive.
@@ -789,35 +789,135 @@ function clearAt(x, z) {
   return Math.hypot(x - 155, z - 170) < 50;
 }
 function buildForest() {
-  const N = LIGHT ? 1500 : 2700, trunkG = new THREE.CylinderGeometry(0.2, 0.32, 1, 7), crownG = new THREE.IcosahedronGeometry(1, 1);
-  const trunks = new THREE.InstancedMesh(trunkG, MAT.bark, N);
-  const crowns = [MAT.leafA, MAT.leafB, MAT.leafC].map(m => new THREE.InstancedMesh(crownG, m, N * 2));
-  const cn = [0, 0, 0], m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+  const N = LIGHT ? 1500 : 2700;
+  const byChunk = new Map(); // chunk -> list of trees with their crowns
   let n = 0;
   for (let i = 0; i < N * 5 && n < N; i++) {
     const x = (wrng() - 0.5) * 700, z = (wrng() - 0.5) * 700;
     if (clearAt(x, z)) continue;
-    // thinner woods in open country, dense near the edge
     const edge = Math.max(Math.abs(x), Math.abs(z));
     // woods come in patches: thin in open country, thick in the woods and near the edge
     const patch = Math.sin(x * 0.021) * Math.cos(z * 0.017) + Math.sin((x + z) * 0.011);
     if (edge < 260 && patch < -0.2 && wrng() < 0.85) continue;
-    const h = 4 + wrng() * 4;
-    m4.compose(new THREE.Vector3(x, h / 2, z), q.identity(), new THREE.Vector3(1, h, 1)); trunks.setMatrixAt(n, m4);
-    for (let k = 0; k < 2; k++) {
-      const ci = Math.floor(wrng() * 3), r = 1.6 + wrng() * 1.6;
-      e.set(wrng() * 3, wrng() * 3, 0); q.setFromEuler(e);
-      m4.compose(new THREE.Vector3(x + (wrng() - 0.5) * 1.2, h + k * 1.2 - 0.4, z + (wrng() - 0.5) * 1.2), q, new THREE.Vector3(r, r * 0.9, r));
-      crowns[ci].setMatrixAt(cn[ci]++, m4);
-    }
+    const tr = { x, z, h: 4 + wrng() * 4, crowns: [] };
+    for (let k = 0; k < 2; k++) tr.crowns.push({ ci: Math.floor(wrng() * 3), r: 1.6 + wrng() * 1.6, ex: wrng() * 3, ey: wrng() * 3, ox: (wrng() - 0.5) * 1.2, oz: (wrng() - 0.5) * 1.2, k });
+    const c = chunkOf(x, z); if (!byChunk.has(c)) byChunk.set(c, []); byChunk.get(c).push(tr);
     if (x > BOUND.x0 - 2 && x < BOUND.x1 + 2 && z > BOUND.z0 - 2 && z < BOUND.z1 + 2) { boxes.push({ x0: x - 0.3, x1: x + 0.3, z0: z - 0.3, z1: z + 0.3 }); trees.push({ x, z }); }
     n++;
   }
-  trunks.count = n; trunks.castShadow = true; world.add(trunks); treeTrunks = trunks;
-  crowns.forEach((c, i) => { c.count = cn[i]; c.castShadow = true; c.receiveShadow = true; world.add(c); });
+  // one set of instanced meshes per chunk, so a far chunk's trees switch off with it
+  const trunkG = new THREE.CylinderGeometry(0.2, 0.32, 1, 7), crownG = new THREE.IcosahedronGeometry(1, 1);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+  for (const [c, list] of byChunk) {
+    const trunks = new THREE.InstancedMesh(trunkG, MAT.bark, list.length);
+    const crowns = [MAT.leafA, MAT.leafB, MAT.leafC].map(m => new THREE.InstancedMesh(crownG, m, list.length * 2));
+    const cn = [0, 0, 0];
+    list.forEach((t, i) => {
+      m4.compose(v.set(t.x, t.h / 2, t.z), q.identity(), sc.set(1, t.h, 1)); trunks.setMatrixAt(i, m4);
+      for (const cr of t.crowns) {
+        e.set(cr.ex, cr.ey, 0); q.setFromEuler(e);
+        m4.compose(v.set(t.x + cr.ox, t.h + cr.k * 1.2 - 0.4, t.z + cr.oz), q, sc.set(cr.r, cr.r * 0.9, cr.r));
+        crowns[cr.ci].setMatrixAt(cn[cr.ci]++, m4);
+      }
+    });
+    trunks.castShadow = true; world.add(trunks); c.objs.push(trunks); trunks.userData.chunked = true;
+    crowns.forEach((m, i) => { m.count = cn[i]; m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); world.add(m); c.objs.push(m); m.userData.chunked = true; });
+    trunks.computeBoundingSphere();
+  }
+}
+
+// ---- Streaming: the map in 100 m chunks; only those near the player are on --------------------
+// A chunk that is off is not drawn, not hit by the aim or camera rays, and its walls are not
+// tested for collision. Nothing in it is lost: furniture, loot and fires keep their state.
+const CH = 100, CH0 = -350, CHN = 7;
+const chunks = [];
+for (let j = 0; j < CHN; j++) for (let i = 0; i < CHN; i++) chunks.push({ i, j, x0: CH0 + i * CH, z0: CH0 + j * CH, objs: [], solids: [], on: true, near: false });
+function chunkOf(x, z) {
+  const i = Math.max(0, Math.min(CHN - 1, Math.floor((x - CH0) / CH))), j = Math.max(0, Math.min(CHN - 1, Math.floor((z - CH0) / CH)));
+  return chunks[j * CHN + i];
+}
+const globalSolids = [];
+function chunkWorld() { // sort everything built so far into chunks; very large pieces (ground, long roads) stay on
+  const solidSet = new Set(solids), b3 = new THREE.Box3(), v = new THREE.Vector3(), sz = new THREE.Vector3();
+  for (const o of world.children.slice()) {
+    if (o === camera || o.isLight || o === sun.target || o.userData.chunked) continue;
+    const owned = []; o.traverse(m => { if (solidSet.has(m)) owned.push(m); });
+    b3.setFromObject(o); b3.getSize(sz);
+    if (b3.isEmpty() || Math.max(sz.x, sz.z) > 120) { globalSolids.push(...owned); continue; }
+    b3.getCenter(v); const c = chunkOf(v.x, v.z); c.objs.push(o); c.solids.push(...owned);
+  }
+}
+// Collision lookup: a 10 m grid over the static boxes; fires and other later boxes are in dynBoxes.
+const GRID = 10, grid = new Map(), dynBoxes = [];
+const gkey = (i, j) => i * 4096 + j;
+function indexBoxes() {
+  for (const b of boxes) for (let i = Math.floor(b.x0 / GRID); i <= Math.floor(b.x1 / GRID); i++) for (let j = Math.floor(b.z0 / GRID); j <= Math.floor(b.z1 / GRID); j++) {
+    const k = gkey(i, j); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(b);
+  }
+}
+let stamp = 0;
+function boxesNear(x, z) {
+  const out = [], i0 = Math.floor((x - 1) / GRID), i1 = Math.floor((x + 1) / GRID), j0 = Math.floor((z - 1) / GRID), j1 = Math.floor((z + 1) / GRID);
+  stamp++;
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const l = grid.get(gkey(i, j)); if (l) for (const b of l) if (b._s !== stamp) { b._s = stamp; out.push(b); } }
+  return out.concat(dynBoxes);
+}
+// Draw-call saver: every static mesh in a chunk is baked into one mesh per material. The
+// original meshes stay, hidden, for the aim and camera rays (rays ignore visibility).
+function mergeGeos(list) {
+  let nv = 0, ni = 0; for (const g of list) { nv += g.attributes.position.count; ni += g.index ? g.index.count : g.attributes.position.count; }
+  const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), idx = new Uint32Array(ni);
+  let vo = 0, io = 0;
+  for (const g of list) {
+    const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv;
+    pos.set(P.array, vo * 3); nor.set(N.array, vo * 3); if (U) uv.set(U.array, vo * 2);
+    if (g.index) for (let k = 0; k < g.index.count; k++) idx[io++] = g.index.array[k] + vo; else for (let k = 0; k < P.count; k++) idx[io++] = k + vo;
+    vo += P.count;
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  out.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); out.setIndex(new THREE.BufferAttribute(idx, 1));
+  out.computeBoundingSphere(); return out;
+}
+function bakeChunks() {
+  world.updateMatrixWorld(true);
+  for (const c of chunks) {
+    const groups = new Map(), keep = [];
+    for (const o of c.objs) {
+      if (o.isInstancedMesh) { keep.push(o); continue; }
+      o.traverse(m => {
+        if (!m.isMesh || m.isInstancedMesh || m.material.transparent) return;
+        const k = m.material.uuid + (m.castShadow ? '+' : '-');
+        if (!groups.has(k)) groups.set(k, { mat: m.material, cast: m.castShadow, geos: [] });
+        const g = m.geometry.clone().applyMatrix4(m.matrixWorld);
+        if (!g.attributes.normal) g.computeVertexNormals();
+        groups.get(k).geos.push(g);
+      });
+      o.visible = false; // the originals: hidden, still hit by rays
+    }
+    for (const { mat, cast, geos } of groups.values()) {
+      const m = new THREE.Mesh(mergeGeos(geos), mat); m.castShadow = cast; m.receiveShadow = true;
+      m.matrixAutoUpdate = false; world.add(m); keep.push(m);
+    }
+    c.objs = keep;
+  }
+}
+let aimTargets = [], nearKey = '';
+function updateChunks() {
+  const s = state, R = Math.min(LIGHT ? tune.stream_radius_mobile : tune.stream_radius, world.fog.far + 25);
+  let key = '';
+  for (const c of chunks) {
+    const dx = Math.max(c.x0 - s.x, 0, s.x - (c.x0 + CH)), dz = Math.max(c.z0 - s.z, 0, s.z - (c.z0 + CH)), d = Math.hypot(dx, dz);
+    const on = d < R; if (on !== c.on) { c.on = on; for (const o of c.objs) o.visible = on; }
+    c.near = d < 60; if (c.near) key += c.i + ',' + c.j + ';';
+  }
+  if (key !== nearKey) { // the rays only test what is close by
+    nearKey = key; aimTargets = globalSolids.slice();
+    for (const c of chunks) if (c.near) for (const m of c.solids) aimTargets.push(m);
+  }
 }
 buildWorld();
-const aimTargets = solids.slice();
+chunkWorld(); bakeChunks(); indexBoxes();
 
 // ---- The survivor (third person) -----------------------------------------------------------
 // Built from capsules and boxes, facing local -z. Legs and arms swing from hip and shoulder
@@ -868,7 +968,6 @@ function poseHero(x, z) {
   if (s.chop) { const k = Math.sin(s.chop.p * Math.PI * 10); h.arms[0].rotation.x = h.arms[1].rotation.x = -1.7 + k * 0.9; h.torso.rotation.x = -0.1 - k * 0.15; }
 }
 const camRay = new THREE.Raycaster();
-const camTargets = aimTargets;
 const _v = new THREE.Vector3(), _o = new THREE.Vector3();
 
 // ---- Backpack: slots of {id, n}; materials stack ---------------------------------------------
@@ -934,13 +1033,13 @@ function placeFire() {
   const flame = mesh(new THREE.ConeGeometry(0.2, 0.6, 8), FIREMAT.flame, 0, 0.42, 0, g, false);
   const core = mesh(new THREE.ConeGeometry(0.1, 0.35, 6), FIREMAT.core, 0, 0.32, 0, g, false);
   const light = new THREE.PointLight(0xff9a4a, tune.fire_light, 16, 1.6); light.position.y = 0.8; g.add(light);
-  const box = { x0: x - 0.4, x1: x + 0.4, z0: z - 0.4, z1: z + 0.4 }; boxes.push(box);
+  const box = { x0: x - 0.4, x1: x + 0.4, z0: z - 0.4, z1: z + 0.4 }; dynBoxes.push(box);
   fires.push({ g, flame, core, light, box, x, z, lit: true, outAt: s.hour + tune.fire_hours });
   sfx.fire();
 }
 function nearFire() { return fires.some(f => f.lit && Math.hypot(f.x - state.x, f.z - state.z) < tune.fire_reach); }
 function clearFires() {
-  for (const f of fires) { world.remove(f.g); const i = boxes.indexOf(f.box); if (i >= 0) boxes.splice(i, 1); }
+  for (const f of fires) { world.remove(f.g); const i = dynBoxes.indexOf(f.box); if (i >= 0) dynBoxes.splice(i, 1); }
   fires.length = 0;
 }
 function flickerFires(t) {
@@ -992,7 +1091,7 @@ function reset() {
     walked: 0, bob: 0, heart: 0, face: 0, crouch: 0, speedNow: 0, searched: 0, eaten: 0, days: 0, dead: false,
   };
   for (const c of containers) { c.items = rollLoot(c.type); c.searched = false; c.refillAt = 0; }
-  clearFires();
+  clearFires(); updateChunks();
   say('Você acordou na estrada. A cidade parece vazia.');
   say('Procure comida e água nas casas antes que acabem.');
 }
@@ -1037,7 +1136,7 @@ function placeCamera(alpha = 1) {
     cy * cp * tune.cam_distance - sy * tune.cam_shoulder);
   const want = _v.length(); _v.normalize();
   camRay.set(_o, _v); camRay.far = want + 0.25;
-  const hit = camRay.intersectObjects(camTargets, false)[0];
+  const hit = camRay.intersectObjects(aimTargets, false)[0];
   let d = hit ? Math.max(0.2, hit.distance - 0.25) : want;
   const hl = Math.hypot(_v.x, _v.z);
   if (hl > 0.05) for (const t of trees) { // trunks near the camera's line
@@ -1051,7 +1150,7 @@ function placeCamera(alpha = 1) {
 }
 function collide(p) {
   const r = tune.player_radius;
-  for (const b of boxes) {
+  for (const b of boxesNear(p.x, p.z)) {
     if (p.x < b.x0 - r || p.x > b.x1 + r || p.z < b.z0 - r || p.z > b.z1 + r) continue;
     const cx = Math.max(b.x0, Math.min(p.x, b.x1)), cz = Math.max(b.z0, Math.min(p.z, b.z1));
     const dx = p.x - cx, dz = p.z - cz, d2 = dx * dx + dz * dz;
@@ -1221,6 +1320,7 @@ const scenes = {
       if (s.search) { const p = s.search.c.group.position; s.face = lerpAngle(s.face, Math.atan2(-(p.x - s.x), -(p.z - s.z)), Math.min(1, 10 * dt)); }
       for (const m of s.msgs) m.life -= dt;
       s.msgs = s.msgs.filter(m => m.life > 0);
+      if (Math.floor(s.t * 60) % 15 === 0) updateChunks();
       if (Math.floor(s.t * 60) % 30 === 0) for (const pl of PLACES) if (!s.found.includes(pl.name) && Math.hypot(pl.x - s.x, pl.z - s.z) < pl.r) { s.found.push(pl.name); say('Você chegou: ' + pl.name); sfx.pick(); }
       s.days = Math.floor((s.hour - s.startHour) / 24);
       s.score = Math.floor(s.hour - s.startHour);
@@ -1420,15 +1520,24 @@ function drawCompass() {
     if (i % 3 === 0) text(L[i / 3], x, y - 1, i === 0 ? 17 : 14, i === 0 ? '#ffcf8a' : '#e6e0d2', 'center', '700');
     else { ctx.fillStyle = 'rgba(230,224,210,0.5)'; ctx.fillRect(x - 0.75, y - 6, 1.5, 9); }
   }
+  const marks = [];
   for (const p of PLACES) {
     const dx = p.x - s.x, dz = p.z - s.z, dist = Math.hypot(dx, dz);
     if (dist < p.r * 0.5) continue;
     const rel = wrap(Math.atan2(dx, -dz) - heading); if (Math.abs(rel) > half) continue;
     const x = cx + rel / half * cw / 2;
     ctx.fillStyle = '#d9b46a'; ctx.beginPath(); ctx.moveTo(x, y + 9); ctx.lineTo(x + 5, y + 15); ctx.lineTo(x, y + 21); ctx.lineTo(x - 5, y + 15); ctx.fill();
-    if (Math.abs(rel) < half * 0.8) shadowText(`${p.name} ${Math.round(dist / 10) * 10} m`, x, y + 32, 12, '#e8dcc0');
+    if (Math.abs(rel) < half * 0.8) marks.push({ x, label: `${p.name} ${Math.round(dist / 10) * 10} m`, dist });
   }
   ctx.restore();
+  // labels: nearest first; one that would overlap another goes on the next row
+  marks.sort((a, b) => a.dist - b.dist);
+  ctx.font = `12px ${FONT}`; const rows = [[], [], []];
+  for (const m of marks) {
+    const w = ctx.measureText(m.label).width + 10, x0 = m.x - w / 2, x1 = m.x + w / 2;
+    const r = rows.findIndex(row => row.every(o => x1 < o[0] || x0 > o[1])); if (r < 0) continue;
+    rows[r].push([x0, x1]); shadowText(m.label, m.x, y + 32 + r * 15, 12, r ? '#c8bea6' : '#e8dcc0');
+  }
   ctx.fillStyle = '#ffcf8a'; ctx.fillRect(cx - 1, y - 17, 2, 7);
 }
 
@@ -1505,6 +1614,7 @@ window.game = {
   get events() { return events; },
   houses, containers, trees, fires, RECIPES,
   get size() { return [W, H]; },
+  chunks, updateChunks, get drawCalls() { return renderer.info.render.calls; }, get aimCount() { return aimTargets.length; },
   PLACES, lakes,
   get buttons() { return BTN; },
   step(n = 1, draw = true, alpha = 1) {

@@ -72,6 +72,8 @@ window.CONFIG = {
   flashlight_power: { value: 60, min: 5, max: 150, step: 5 },
   fog_day_far: { value: 150, min: 40, max: 250, step: 5 },    // m de visibilidade de dia
   mobile_resolution: { value: 0.85, min: 0.4, max: 1, step: 0.05 }, // resolução no celular (1 = nativa)
+  stream_radius: { value: 180, min: 60, max: 600, step: 10 },       // m: quadrados do mapa ativos em volta (computador)
+  stream_radius_mobile: { value: 120, min: 40, max: 400, step: 10 },// m: o mesmo no celular
   fog_night_far: { value: 50, min: 15, max: 150, step: 5 },   // m à noite
 
   volume: { value: 0.5, min: 0, max: 1, step: 0.05 },
