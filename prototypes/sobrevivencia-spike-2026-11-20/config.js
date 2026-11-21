@@ -54,6 +54,25 @@ window.CONFIG = {
   sick_time: { value: 60, min: 10, max: 300, step: 5 },       // segundos doente
   sick_damage: { value: 15, min: 0, max: 60, step: 1 },       // saúde perdida por minuto doente
 
+  // --- Física ---
+  jump_speed: { value: 4.8, min: 2, max: 9, step: 0.1 },        // m/s para cima ao pular
+  fall_safe_speed: { value: 8, min: 3, max: 20, step: 0.5 },    // m/s de queda sem se machucar (~3 m)
+  fall_damage: { value: 7, min: 0, max: 30, step: 0.5 },        // saúde por m/s acima do seguro
+  grab_reach: { value: 2.2, min: 1, max: 4, step: 0.1 },        // m até um objeto para pegar
+  throw_speed: { value: 9, min: 2, max: 25, step: 0.5 },        // m/s ao jogar
+
+  // --- Carros ---
+  car_reach: { value: 2.8, min: 1.5, max: 5, step: 0.1 },       // m do carro para entrar
+  engine_force: { value: 320, min: 50, max: 3000, step: 10 },
+  car_top_speed: { value: 95, min: 20, max: 250, step: 5 },     // km/h
+  brake_force: { value: 12, min: 1, max: 60, step: 1 },
+  handbrake_force: { value: 30, min: 1, max: 100, step: 1 },
+  idle_brake: { value: 1.5, min: 0, max: 10, step: 0.5 },      // freio leve sem acelerar
+  max_steer: { value: 0.55, min: 0.2, max: 0.9, step: 0.05 },   // rad
+  fuel_use: { value: 0.8, min: 0, max: 5, step: 0.1 },          // % do tanque por segundo acelerando
+  can_fuel: { value: 40, min: 5, max: 100, step: 5 },           // % que um galão põe no tanque
+  car_start_fuel_max: { value: 30, min: 0, max: 100, step: 5 }, // cada carro começa com 0 até isto %
+
   // --- Câmera em terceira pessoa ---
   cam_distance: { value: 2.8, min: 1, max: 6, step: 0.1 },    // m atrás do personagem
   cam_shoulder: { value: 0.55, min: -1.5, max: 1.5, step: 0.05 }, // m para o lado (positivo: ombro direito)
@@ -82,9 +101,9 @@ window.CONFIG = {
   loot: {
     geladeira: { min: 0, max: 2, items: [['agua', 4], ['refri', 3], ['maca', 2], ['sardinha', 1]] },
     armario: { min: 0, max: 2, items: [['feijao', 3], ['cereal', 3], ['sardinha', 2], ['agua', 1], ['pano', 2], ['fita', 1], ['fosforos', 1]] },
-    caixa: { min: 0, max: 2, items: [['cereal', 2], ['agua', 2], ['curativo', 1], ['feijao', 1], ['fita', 2], ['pano', 2], ['fosforos', 1]] },
+    caixa: { min: 0, max: 2, items: [['cereal', 2], ['agua', 2], ['curativo', 1], ['feijao', 1], ['fita', 2], ['pano', 2], ['fosforos', 1], ['galao', 1]] },
     comoda: { min: 0, max: 2, items: [['curativo', 2], ['cereal', 2], ['maca', 1], ['pano', 3], ['fosforos', 2]] },
     pilha: { min: 2, max: 4, items: [['lenha', 1]] },
-    prateleira: { min: 0, max: 3, items: [['feijao', 3], ['cereal', 2], ['agua', 3], ['refri', 2], ['sardinha', 2], ['fosforos', 1], ['fita', 1]] },
+    prateleira: { min: 0, max: 3, items: [['feijao', 3], ['cereal', 2], ['agua', 3], ['refri', 2], ['sardinha', 2], ['fosforos', 1], ['fita', 1], ['galao', 2]] },
   },
 };

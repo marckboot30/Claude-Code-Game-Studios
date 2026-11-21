@@ -16,3 +16,10 @@
   tool: "esbuild 0.28.2, one plain script for play from a file"
   date: 2026-11-20
   ships: true
+- path: vendor/cannon.js
+  origin: licensed
+  source: {product: cannon-es, version: "0.20.0", url: https://github.com/pmndrs/cannon-es}
+  licence: {id: MIT}
+  tool: "esbuild 0.24.0, one plain script (global CANNON) for play from a file"
+  date: 2026-11-21
+  ships: true
