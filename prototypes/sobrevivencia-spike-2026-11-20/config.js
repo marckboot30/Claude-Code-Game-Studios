@@ -43,6 +43,12 @@ window.CONFIG = {
   sick_time: { value: 60, min: 10, max: 300, step: 5 },       // segundos doente
   sick_damage: { value: 15, min: 0, max: 60, step: 1 },       // saúde perdida por minuto doente
 
+  // --- Câmera em terceira pessoa ---
+  cam_distance: { value: 2.8, min: 1, max: 6, step: 0.1 },    // m atrás do personagem
+  cam_shoulder: { value: 0.55, min: -1.5, max: 1.5, step: 0.05 }, // m para o lado (positivo: ombro direito)
+  cam_height: { value: 0.3, min: -0.5, max: 2, step: 0.05 },   // m acima da cabeça
+  reach_3p: { value: 2.0, min: 1, max: 3.5, step: 0.1 },       // m até onde alcança um móvel na frente
+
   // --- Movimento ---
   walk_speed: { value: 3.2, min: 1, max: 8, step: 0.1 },      // m/s
   run_speed: { value: 5.6, min: 2, max: 12, step: 0.1 },      // m/s com Shift

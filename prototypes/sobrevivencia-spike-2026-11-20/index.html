@@ -40,11 +40,11 @@ const TITLE = 'SOBREVIVÊNCIA';
 const CONTROLS = TOUCH ? [
   'Polegar esquerdo: andar   ·   Arraste à direita: olhar',
   'Segure VASCULHAR perto de um móvel   ·   Toque na mochila: comer / beber',
-  'Botões: correr, lanterna e pausa',
+  'Botões: correr, lanterna, câmera e pausa',
 ] : [
   'W A S D: andar   ·   Mouse: olhar (ou setas ← →)   ·   Shift: correr',
   'Segure E: vasculhar móveis   ·   1 a 6: comer / beber / usar',
-  'F: lanterna   ·   P ou Esc: pausa   ·   M: som',
+  'F: lanterna   ·   V: trocar câmera   ·   P ou Esc: pausa   ·   M: som',
 ];
 const clock = window.GAME_CLOCK || { now: () => performance.now() / 1000 };
 const CHEAP = params.get('render') === 'cheap';
@@ -140,6 +140,7 @@ function layoutButtons() { // the right thumb's column, kept clear of the backpa
   BTN.run = { x: W - 255, y: H - 215, r: 44, label: 'CORRER' };
   BTN.flash = { x: W - 80, y: H - 295, r: 40, label: 'LANTERNA' };
   BTN.pause = { x: W - 44, y: 44, r: 28, label: '' };
+  BTN.view = { x: W - 112, y: 44, r: 28, label: '' };
 }
 layoutButtons();
 function toLogical(e) {
@@ -178,6 +179,7 @@ addEventListener('pointerdown', e => {
       else if (k === 'run') touch.run = !touch.run;
       else if (k === 'flash') hit.add('KeyF');
       else if (k === 'pause') hit.add('KeyP');
+      else if (k === 'view') hit.add('KeyV');
       return;
     }
   }
@@ -235,6 +237,10 @@ function drawTouch() {
       ctx.fillRect(b.x - 16, b.y - 12, 16, 9); ctx.beginPath(); ctx.moveTo(b.x, b.y - 14); ctx.lineTo(b.x + 6, b.y - 18); ctx.lineTo(b.x + 6, b.y + 1); ctx.lineTo(b.x, b.y - 3); ctx.fill();
       if (state.flash) { ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.moveTo(b.x + 8, b.y - 16); ctx.lineTo(b.x + 22, b.y - 22); ctx.lineTo(b.x + 22, b.y + 5); ctx.lineTo(b.x + 8, b.y - 1); ctx.fill(); ctx.globalAlpha = 1; }
     } else if (k === 'pause') { ctx.fillRect(b.x - 9, b.y - 11, 6, 22); ctx.fillRect(b.x + 3, b.y - 11, 6, 22); }
+    else if (k === 'view') { // camera body with a lens; a small figure when in third person
+      ctx.fillRect(b.x - 13, b.y - 7, 22, 15); ctx.beginPath(); ctx.moveTo(b.x + 9, b.y - 2); ctx.lineTo(b.x + 15, b.y - 7); ctx.lineTo(b.x + 15, b.y + 8); ctx.lineTo(b.x + 9, b.y + 3); ctx.fill();
+      ctx.fillStyle = '#222'; ctx.font = `700 11px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(viewMode === 3 ? '3ª' : '1ª', b.x - 2, b.y + 1);
+    }
     if (b.label) shadowText(b.label, b.x, b.y + (k === 'search' ? 26 : 22), k === 'search' ? 14 : 11, '#f0ebe0', 'center', '700');
   }
   ctx.restore();
@@ -612,6 +618,56 @@ function buildWorld() {
 buildWorld();
 const aimTargets = solids.slice();
 
+// ---- The survivor (third person) -----------------------------------------------------------
+// Built from capsules and boxes, facing local -z. Legs and arms swing from hip and shoulder
+// pivots; crouching lowers the body and reaches the arms forward.
+let viewMode = 3; // 3: over the shoulder, 1: through the eyes (V or the camera button)
+const hero = (() => {
+  const C = (c, r = 0.85) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
+  const skin = C(0xb88a6c, 0.7), jacket = C(0x4b5340), pants = C(0x30363f), boots = C(0x2b231d), cap = C(0x6b5a3f), pack = C(0x5b4a33), strap = C(0x2e2a24);
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); world.add(root);
+  const part = (geo, mat, x, y, z, parent) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+  const legs = [-0.11, 0.11].map(x => {
+    const pv = new THREE.Group(); pv.position.set(x, 0.95, 0); root.add(pv);
+    part(new THREE.CapsuleGeometry(0.075, 0.68, 4, 10), pants, 0, -0.43, 0, pv);
+    part(new THREE.BoxGeometry(0.13, 0.11, 0.27), boots, 0, -0.89, -0.04, pv);
+    return pv;
+  });
+  const torso = new THREE.Group(); torso.position.y = 0.95; body.add(torso);
+  part(new THREE.CapsuleGeometry(0.17, 0.32, 4, 12), jacket, 0, 0.32, 0, torso).scale.set(1, 1, 0.72);
+  part(new THREE.CylinderGeometry(0.16, 0.15, 0.12, 12), pants, 0, 0.04, 0, torso).scale.set(1, 1, 0.75);
+  part(new THREE.CylinderGeometry(0.05, 0.06, 0.1, 8), skin, 0, 0.62, 0, torso);
+  part(new THREE.SphereGeometry(0.115, 16, 12), skin, 0, 0.74, 0, torso).scale.set(0.92, 1.08, 1);
+  part(new THREE.SphereGeometry(0.122, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), cap, 0, 0.77, 0, torso);
+  part(new THREE.SphereGeometry(0.118, 14, 10), C(0x3a2c22, 1), 0, 0.735, 0.018, torso).scale.set(0.95, 0.95, 0.95); // hair, showing at the back
+  part(new THREE.BoxGeometry(0.2, 0.02, 0.12), cap, 0, 0.775, -0.15, torso);
+  part(new THREE.BoxGeometry(0.32, 0.42, 0.17), pack, 0, 0.34, 0.2, torso);
+  part(new THREE.BoxGeometry(0.28, 0.12, 0.06), pack, 0, 0.2, 0.31, torso);
+  for (const x of [-0.1, 0.1]) part(new THREE.BoxGeometry(0.04, 0.42, 0.03), strap, x, 0.36, -0.12, torso);
+  const arms = [-0.235, 0.235].map(x => {
+    const pv = new THREE.Group(); pv.position.set(x, 0.5, 0); torso.add(pv);
+    part(new THREE.CapsuleGeometry(0.06, 0.42, 4, 8), jacket, 0, -0.26, 0, pv);
+    part(new THREE.SphereGeometry(0.05, 10, 8), skin, 0, -0.55, -0.01, pv);
+    return pv;
+  });
+  return { root, body, torso, legs, arms };
+})();
+function lerpAngle(a, b, t) { let d = ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI; return a + d * t; }
+function poseHero(x, z) {
+  const s = state, h = hero, c = s.crouch || 0;
+  h.root.position.set(x, 0, z); h.root.rotation.y = s.face;
+  const amp = s.speedNow > 4.5 ? 0.85 : 0.5, sw = Math.sin(s.bob * 1.4) * amp * Math.min(1, s.speedNow / 2);
+  h.legs[0].rotation.x = sw * (1 - c); h.legs[1].rotation.x = -sw * (1 - c);
+  h.legs[0].scale.y = h.legs[1].scale.y = 1 - 0.32 * c;
+  h.torso.position.y = 0.95 - 0.3 * c + Math.abs(Math.sin(s.bob * 1.4)) * 0.03 * Math.min(1, s.speedNow / 2);
+  h.torso.rotation.x = -0.45 * c - (s.speedNow > 4.5 ? 0.15 : 0);
+  const reach = c > 0.5 ? Math.sin(s.t * 9) * 0.25 : 0;
+  h.arms[0].rotation.x = -sw * 0.8 * (1 - c) - 1.1 * c + reach; h.arms[1].rotation.x = sw * 0.8 * (1 - c) - 1.1 * c - reach;
+  h.arms[0].rotation.z = -0.08; h.arms[1].rotation.z = 0.08;
+}
+const camRay = new THREE.Raycaster();
+const _v = new THREE.Vector3(), _o = new THREE.Vector3();
+
 // ---- Loot ------------------------------------------------------------------------------
 function rollLoot(type, chance = 1) {
   const t = CONFIG.loot[type], out = [];
@@ -637,7 +693,7 @@ function reset() {
     hour: sh !== null ? Number(sh) : tune.start_hour, startHour: sh !== null ? Number(sh) : tune.start_hour,
     health: 100, hunger: tune.start_hunger, thirst: tune.start_thirst, sick: 0,
     inv: ['agua', 'cereal'], flash: false, search: null, aim: null, msgs: [],
-    walked: 0, bob: 0, heart: 0, searched: 0, eaten: 0, days: 0, dead: false,
+    walked: 0, bob: 0, heart: 0, face: 0, crouch: 0, speedNow: 0, searched: 0, eaten: 0, days: 0, dead: false,
   };
   for (const c of containers) { c.items = rollLoot(c.type); c.searched = false; c.refillAt = 0; }
   say('Você acordou na estrada. A cidade parece vazia.');
@@ -647,6 +703,21 @@ function say(s) { state.msgs.push({ s, life: 6 }); if (state.msgs.length > 5) st
 const ray = new THREE.Raycaster(); ray.far = 2.4;
 const v2 = new THREE.Vector2(0, 0);
 function aimContainer() {
+  if (viewMode === 3) { // the nearest furniture in front of the survivor, in the same room
+    const s = state, fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw);
+    let best = null, bd = 1e9;
+    for (const c of containers) {
+      const p = c.group.position, dx = p.x - s.x, dz = p.z - s.z, d = Math.hypot(dx, dz);
+      if (d > tune.reach_3p || d >= bd) continue;
+      if (d > 0.01 && (dx * fx + dz * fz) / d < 0.35) continue;
+      _o.set(s.x, 1.0, s.z); _v.set(dx, 0, dz).normalize(); ray.set(_o, _v); ray.far = d;
+      const hit = ray.intersectObjects(aimTargets, false)[0];
+      let o = hit && hit.object, mine = !hit;
+      while (o && !mine) { if (o.userData.container === c) mine = true; o = o.parent; }
+      if (mine) { best = c; bd = d; }
+    }
+    ray.far = 2.4; return best;
+  }
   ray.setFromCamera(v2, camera);
   const hits = ray.intersectObjects(aimTargets, false);
   if (!hits.length) return null;
@@ -655,9 +726,25 @@ function aimContainer() {
   return null;
 }
 function placeCamera(alpha = 1) {
-  const s = state;
-  camera.position.set(s.px + (s.x - s.px) * alpha, 1.62 + Math.sin(s.bob) * 0.035, s.pz + (s.z - s.pz) * alpha);
+  const s = state, x = s.px + (s.x - s.px) * alpha, z = s.pz + (s.z - s.pz) * alpha;
   camera.rotation.set(s.pitch, s.yaw, 0);
+  if (viewMode === 1 || scene === 'title') {
+    hero.root.visible = false;
+    camera.position.set(x, 1.62 - 0.45 * (s.crouch || 0) + Math.sin(s.bob) * 0.035, z); return;
+  }
+  poseHero(x, z);
+  // over the shoulder: back along the view, to the right, pulled in when a wall is in the way
+  const cp = Math.cos(s.pitch), sy = Math.sin(s.yaw), cy = Math.cos(s.yaw);
+  _o.set(x, 1.55 - 0.3 * (s.crouch || 0), z);
+  _v.set(sy * cp * tune.cam_distance + cy * tune.cam_shoulder, tune.cam_height - Math.sin(s.pitch) * tune.cam_distance,
+    cy * cp * tune.cam_distance - sy * tune.cam_shoulder);
+  const want = _v.length(); _v.normalize();
+  camRay.set(_o, _v); camRay.far = want + 0.25;
+  const hit = camRay.intersectObjects(aimTargets, false)[0];
+  const d = hit ? Math.max(0.2, hit.distance - 0.25) : want;
+  camera.position.copy(_o).addScaledVector(_v, d);
+  if (camera.position.y < 0.25) camera.position.y = 0.25;
+  hero.root.visible = d > 0.7; // too close to the head: hide the body rather than look through it
 }
 function collide(p) {
   const r = tune.player_radius;
@@ -746,7 +833,8 @@ const scenes = {
       s.yaw -= lookX * tune.mouse_sens; s.pitch -= lookY * tune.mouse_sens; lookX = lookY = 0;
       if (down.has('ArrowLeft')) s.yaw += tune.turn_speed * dt;
       if (down.has('ArrowRight')) s.yaw -= tune.turn_speed * dt;
-      s.pitch = Math.max(-1.4, Math.min(1.4, s.pitch));
+      s.pitch = viewMode === 3 ? Math.max(-1.0, Math.min(0.75, s.pitch)) : Math.max(-1.4, Math.min(1.4, s.pitch));
+      if (pressed('KeyV')) { viewMode = viewMode === 3 ? 1 : 3; say(viewMode === 3 ? 'Câmera: terceira pessoa' : 'Câmera: primeira pessoa'); sfx.click(); }
       // move
       let f = 0, st = 0;
       if (down.has('KeyW') || down.has('ArrowUp')) f += 1;
@@ -763,9 +851,11 @@ const scenes = {
         s.x += (-sy * f + cy * st) / len * sp * dt; s.z += (-cy * f - sy * st) / len * sp * dt;
         collide(s);
         const moved = Math.hypot(s.x - s.px, s.z - s.pz);
+        if (moved > 0.001) s.face = lerpAngle(s.face, Math.atan2(-(s.x - s.px), -(s.z - s.pz)), Math.min(1, 12 * dt));
         s.bob += moved * 3.2; s.walked += moved;
         if (s.walked > (running ? 1.6 : 1.35)) { s.walked = 0; sfx.step(); }
       }
+      s.speedNow = Math.hypot(s.x - s.px, s.z - s.pz) / dt;
       // time and needs
       s.hour += 24 / tune.day_length * dt;
       s.hunger = Math.max(0, s.hunger - tune.hunger_drain / 60 * dt);
@@ -806,6 +896,8 @@ const scenes = {
           }
         } else if (pressed('KeyE')) { if (c.items.length) take(c); else { say(`A ${c.name} está vazia.`); sfx.empty(); } }
       } else s.search = null;
+      s.crouch += ((s.search ? 1 : 0) - s.crouch) * Math.min(1, 10 * dt);
+      if (s.search) { const p = s.search.c.group.position; s.face = lerpAngle(s.face, Math.atan2(-(p.x - s.x), -(p.z - s.z)), Math.min(1, 10 * dt)); }
       for (const m of s.msgs) m.life -= dt;
       s.msgs = s.msgs.filter(m => m.life > 0);
       s.days = Math.floor((s.hour - s.startHour) / 24);
@@ -943,7 +1035,7 @@ function drawHud(day) {
   }
   // messages
   s.msgs.forEach((m, i) => {
-    ctx.globalAlpha = Math.min(1, m.life); shadowText(m.s, W - (TOUCH ? 96 : 28), 34 + i * 26, 17, '#e8e2d4', 'right'); ctx.globalAlpha = 1;
+    ctx.globalAlpha = Math.min(1, m.life); shadowText(m.s, W - (TOUCH ? 160 : 28), 34 + i * 26, 17, '#e8e2d4', 'right'); ctx.globalAlpha = 1;
   });
   if (TOUCH) drawTouch();
 }
