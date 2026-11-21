@@ -727,11 +727,12 @@ const PLACES = [
   { name: 'Posto Florestal', x: -118, z: -205, r: 30 },
   { name: 'Lago Azul', x: 155, z: 170, r: 60 },
 ];
+let groundMesh = null; // follows the player in 5 m steps (the grass repeats every 5 m)
 const ROAD_A = -55, ROAD_B = 55; // the town's side roads: east to the village, west to the farm
 function buildWorld() {
   // ground, road, sidewalks, centre line
   const gg = new THREE.PlaneGeometry(900, 900); gg.attributes.uv.array.forEach((v, i, a) => { a[i] = v * 180; });
-  mesh(gg, MAT.grass, 0, 0, 0, world, false).rotation.x = -Math.PI / 2;
+  groundMesh = mesh(gg, MAT.grass, 0, 0, 0, world, false); groundMesh.rotation.x = -Math.PI / 2;
   box(0, -0.02, -15, 8, 0.04, 300, MAT.asphalt, false, 6);
   box(-5, 0, -15, 2, 0.12, 300, MAT.concrete, false, 1.5); box(5, 0, -15, 2, 0.12, 300, MAT.concrete, false, 1.5);
   for (let z = 125; z > -150; z -= 6) if (vr(z) > 0.25) box(0, 0.01, z, 0.15, 0.02, 3, MAT.line, false);
@@ -741,7 +742,7 @@ function buildWorld() {
     for (const s of [-1, 1]) {
       const w = 7 + wrng() * 2.5, d = 9.5 + wrng() * 2.5, cz = z + (wrng() - 0.5) * 4;
       const cx = s * (8 + w / 2 + wrng() * 3);
-      if ((s > 0 && Math.abs(cz - ROAD_A) < d / 2 + 6) || (s < 0 && Math.abs(cz - ROAD_B) < d / 2 + 6)) continue; // a side road leaves here
+      if (Math.abs(cz - ROAD_A) < d / 2 + 6 || (s < 0 && Math.abs(cz - ROAD_B) < d / 2 + 6)) continue; // a side road leaves here
       houses.push(house(cx, cz, w, d, -s, mi++ + Math.floor(wrng() * 3)));
       // a fence segment between yards
       if (wrng() < 0.6) for (let i = 0; i < 6; i++) box(s * (7.5 + i * 1.6), 0, cz + 11, 0.08, 1.0 + vr(i + z) * 0.15, 0.08, MAT.planks, false, 1);
@@ -814,9 +815,11 @@ const MAT2 = {
   white: new THREE.MeshStandardMaterial({ color: 0xcfcbc0, roughness: 0.6 }),
 };
 function buildRoads() {
-  road(4, 216, ROAD_A - 4, ROAD_A + 4);                 // east to the village
+  road(4, 350, ROAD_A - 4, ROAD_A + 4);                 // east past the village, on to the next region
+  road(-350, -4, ROAD_A - 4, ROAD_A + 4);               // west out of the region
+  road(-4, 4, -350, -158);                              // north past the market
   road(-206, -4, ROAD_B - 4, ROAD_B + 4);               // west to the farm
-  road(-4, 4, 135, 295);                                // south out of town
+  road(-4, 4, 135, 350);                                // south out of town
   road(4, 108, 167, 173, MAT2.dirt);                    // lane to the lake
   road(-206, -194, 59, 175, MAT2.dirt);                 // farm lane
   road(-124, -116, -200, 51, MAT2.dirt);                // track to the ranger post
@@ -926,6 +929,7 @@ function buildSouth() { // a few houses on the road out of town
 }
 // Where trees may not grow: towns, roads, fields, the lake.
 const CLEAR = [
+  [-352, 352, ROAD_A - 7, ROAD_A + 7], [-8, 8, -352, -150], [-8, 8, 290, 352],
   [-30, 30, -172, 135], [0, 222, ROAD_A - 7, ROAD_A + 7], [178, 250, -248, -48], [-210, 0, ROAD_B - 7, ROAD_B + 7],
   [-292, -128, 55, 182], [-128, -112, -205, 58], [-135, -96, -222, -190], [-8, 8, 130, 300], [-26, 26, 175, 275], [0, 112, 160, 180],
 ];
@@ -944,16 +948,26 @@ function buildForest() {
     // woods come in patches: thin in open country, thick in the woods and near the edge
     const patch = Math.sin(x * 0.021) * Math.cos(z * 0.017) + Math.sin((x + z) * 0.011);
     if (edge < 260 && patch < -0.2 && wrng() < 0.85) continue;
-    const tr = { x, z, h: 4 + wrng() * 4, crowns: [] };
-    for (let k = 0; k < 2; k++) tr.crowns.push({ ci: Math.floor(wrng() * 3), r: 1.6 + wrng() * 1.6, ex: wrng() * 3, ey: wrng() * 3, ox: (wrng() - 0.5) * 1.2, oz: (wrng() - 0.5) * 1.2, k });
+    const tr = makeTree(x, z);
     const c = chunkOf(x, z); if (!byChunk.has(c)) byChunk.set(c, []); byChunk.get(c).push(tr);
     if (x > BOUND.x0 - 2 && x < BOUND.x1 + 2 && z > BOUND.z0 - 2 && z < BOUND.z1 + 2) { boxes.push({ x0: x - 0.3, x1: x + 0.3, z0: z - 0.3, z1: z + 0.3, y0: 0, y1: 9 }); trees.push({ x, z }); }
     n++;
   }
-  // one set of instanced meshes per chunk, so a far chunk's trees switch off with it
-  const trunkG = new THREE.CylinderGeometry(0.2, 0.32, 1, 7), crownG = new THREE.IcosahedronGeometry(1, 1);
+  for (const [c, list] of byChunk) plantTrees(c, list);
+}
+// One set of instanced meshes per chunk, so a far chunk's trees switch off (and unload) with it.
+const TRUNK_G = new THREE.CylinderGeometry(0.2, 0.32, 1, 7), CROWN_G = new THREE.IcosahedronGeometry(1, 1);
+TRUNK_G.userData.shared = CROWN_G.userData.shared = true;
+function makeTree(x, z) {
+  const tr = { x, z, h: 4 + wrng() * 4, crowns: [] };
+  for (let k = 0; k < 2; k++) tr.crowns.push({ ci: Math.floor(wrng() * 3), r: 1.6 + wrng() * 1.6, ex: wrng() * 3, ey: wrng() * 3, ox: (wrng() - 0.5) * 1.2, oz: (wrng() - 0.5) * 1.2, k });
+  return tr;
+}
+function plantTrees(c, list) {
+  if (!list.length) return;
+  const trunkG = TRUNK_G, crownG = CROWN_G;
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
-  for (const [c, list] of byChunk) {
+  {
     const trunks = new THREE.InstancedMesh(trunkG, MAT.bark, list.length);
     const crowns = [MAT.leafA, MAT.leafB, MAT.leafC].map(m => new THREE.InstancedMesh(crownG, m, list.length * 2));
     const cn = [0, 0, 0];
@@ -974,13 +988,18 @@ function buildForest() {
 // ---- Streaming: the map in 100 m chunks; only those near the player are on --------------------
 // A chunk that is off is not drawn, not hit by the aim or camera rays, and its walls are not
 // tested for collision. Nothing in it is lost: furniture, loot and fires keep their state.
-const CH = 100, CH0 = -350, CHN = 7;
-const chunks = [];
-for (let j = 0; j < CHN; j++) for (let i = 0; i < CHN; i++) chunks.push({ i, j, x0: CH0 + i * CH, z0: CH0 + j * CH, objs: [], solids: [], on: true, near: false });
-function chunkOf(x, z) {
-  const i = Math.max(0, Math.min(CHN - 1, Math.floor((x - CH0) / CH))), j = Math.max(0, Math.min(CHN - 1, Math.floor((z - CH0) / CH)));
-  return chunks[j * CHN + i];
+// The map has no edge: chunk (gi, gj) covers x from gi*100-50 to gi*100+50 (z likewise). The
+// starting region (|gi|, |gj| <= 3) is built once at start; every other chunk is generated when
+// you come near and unloaded again when you are far, keeping what you did there (see genChunk).
+const CH = 100;
+const chunks = new Map();
+const isOrigin = (gi, gj) => Math.abs(gi) <= 3 && Math.abs(gj) <= 3;
+function chunkAt(gi, gj) {
+  const k = gi + ',' + gj; let c = chunks.get(k);
+  if (!c) { c = { key: k, gi, gj, i: gi, j: gj, x0: gi * CH - CH / 2, z0: gj * CH - CH / 2, objs: [], solids: [], on: true, near: false, origin: isOrigin(gi, gj), gen: false }; chunks.set(k, c); }
+  return c;
 }
+function chunkOf(x, z) { return chunkAt(Math.floor((x + CH / 2) / CH), Math.floor((z + CH / 2) / CH)); }
 const globalSolids = [];
 function chunkWorld() { // sort everything built so far into chunks; very large pieces (ground, long roads) stay on
   const solidSet = new Set(solids), b3 = new THREE.Box3(), v = new THREE.Vector3(), sz = new THREE.Vector3();
@@ -995,8 +1014,8 @@ function chunkWorld() { // sort everything built so far into chunks; very large 
 // Collision lookup: a 10 m grid over the static boxes; fires and other later boxes are in dynBoxes.
 const GRID = 10, grid = new Map(), dynBoxes = [];
 const gkey = (i, j) => i * 4096 + j;
-function indexBoxes() {
-  for (const b of boxes) for (let i = Math.floor(b.x0 / GRID); i <= Math.floor(b.x1 / GRID); i++) for (let j = Math.floor(b.z0 / GRID); j <= Math.floor(b.z1 / GRID); j++) {
+function indexBoxes(list = boxes) {
+  for (const b of list) for (let i = Math.floor(b.x0 / GRID); i <= Math.floor(b.x1 / GRID); i++) for (let j = Math.floor(b.z0 / GRID); j <= Math.floor(b.z1 / GRID); j++) {
     const k = gkey(i, j); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(b);
   }
 }
@@ -1024,9 +1043,9 @@ function mergeGeos(list) {
   out.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); out.setIndex(new THREE.BufferAttribute(idx, 1));
   out.computeBoundingSphere(); return out;
 }
-function bakeChunks() {
-  world.updateMatrixWorld(true);
-  for (const c of chunks) {
+function bakeChunks() { world.updateMatrixWorld(true); for (const c of chunks.values()) bakeChunk(c); }
+function bakeChunk(c) {
+  {
     const groups = new Map(), keep = [];
     for (const o of c.objs) {
       if (o.isInstancedMesh) { keep.push(o); continue; }
@@ -1043,19 +1062,182 @@ function bakeChunks() {
     for (const { mat, cast, geos } of groups.values()) {
       const m = new THREE.Mesh(mergeGeos(geos), mat); m.castShadow = cast; m.receiveShadow = true;
       m.matrixAutoUpdate = false; world.add(m); keep.push(m);
+      for (const g of geos) g.dispose();
     }
+    c.hidden = c.objs.filter(o => !o.isInstancedMesh); // originals, kept for rays; freed on unload
     c.objs = keep;
   }
+}
+// ---- The endless world: chunks generated around you, unloaded when far ----------------------------
+const saves = new Map();      // chunk key -> what you changed there: furniture loot, parked cars
+const orphanCars = new Set(); // cars driven out of their own chunk; they stay until far from you
+const TOWN_NAMES = ['São Jorge', 'Boa Esperança', 'Santa Rita', 'Nova Aurora', 'Pedra Branca', 'Rio Seco', 'Campo Belo', 'Vale Verde',
+  'Monte Alto', 'Ribeirão Frio', 'Lagoa Funda', 'Serra Velha', 'Bom Retiro', 'Água Clara', 'Três Cruzes', 'Porto Novo', 'Alto Bonito', 'Cerro Azul'];
+function hash2(a, b) { let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263) ^ Math.imul(CONFIG.seed, 2246822519); h = Math.imul(h ^ (h >>> 13), 1274126177); return (h ^ (h >>> 16)) | 0; }
+const mod = (a, n) => ((a % n) + n) % n;
+const colRoadAt = gi => mod(gi, 6) === 0;                                 // a road along z at x = gi*100
+const nearestRowZ = z => ROAD_A + Math.round((z - ROAD_A) / 600) * 600;
+function rowRoadIn(z0) { const z = nearestRowZ(z0 + 50); return z - 4 >= z0 && z + 4 <= z0 + CH ? z : null; } // along x
+function streamWorld(R) {
+  const s = state, GEN = R + 70, DROP = GEN + 140;
+  const gi0 = Math.floor((s.x + 50) / CH), gj0 = Math.floor((s.z + 50) / CH), n = Math.ceil(GEN / CH) + 1;
+  // generate the nearest missing chunk (one per call keeps it smooth)
+  let best = null, bd = Infinity;
+  for (let i = gi0 - n; i <= gi0 + n; i++) for (let j = gj0 - n; j <= gj0 + n; j++) {
+    if (isOrigin(i, j)) continue;
+    const c = chunks.get(i + ',' + j); if (c && c.gen) continue;
+    const x0 = i * CH - 50, z0 = j * CH - 50, dx = Math.max(x0 - s.x, 0, s.x - (x0 + CH)), dz = Math.max(z0 - s.z, 0, s.z - (z0 + CH)), d = Math.hypot(dx, dz);
+    if (d < GEN && d < bd) { bd = d; best = [i, j]; }
+  }
+  if (best) genChunk(chunkAt(best[0], best[1]));
+  for (const c of [...chunks.values()]) {
+    if (!c.gen) continue;
+    const dx = Math.max(c.x0 - s.x, 0, s.x - (c.x0 + CH)), dz = Math.max(c.z0 - s.z, 0, s.z - (c.z0 + CH));
+    if (Math.hypot(dx, dz) > DROP) unloadChunk(c);
+  }
+  for (const car of [...orphanCars]) if (car !== s.driving && Math.hypot(car.chassis.position.x - s.x, car.chassis.position.z - s.z) > DROP) { removeCar(car); orphanCars.delete(car); }
+}
+function genChunk(c) {
+  wseed = hash2(c.gi, c.gj);
+  const n0 = { kids: world.children.length, solids: solids.length, boxes: boxes.length, cont: containers.length, doors: doors.length, props: props.length, cars: cars.length, trees: trees.length, lakes: lakes.length, pumps: pumps.length };
+  const x0 = c.x0, z0 = c.z0, cx = x0 + 50, cz = z0 + 50, col = colRoadAt(c.gi), rz = rowRoadIn(z0);
+  const save = saves.get(c.key);
+  const clear = []; // rectangles where no tree grows
+  const treesIn = [];
+  const addTrees = (count) => {
+    for (let i = 0, k = 0; i < count * 4 && k < count; i++) {
+      const x = x0 + 2 + wrng() * 96, z = z0 + 2 + wrng() * 96;
+      if (clear.some(r => x > r[0] && x < r[1] && z > r[2] && z < r[3])) continue;
+      if (Math.abs(z - nearestRowZ(z)) < 11 || Math.abs(x - Math.round(x / 600) * 600) < 11) continue; // roadsides
+      if (lakes.slice(n0.lakes).some(l => Math.hypot(x - l.x, z - l.z) < l.r + 6)) continue;
+      treesIn.push(makeTree(x, z)); boxes.push({ x0: x - 0.3, x1: x + 0.3, z0: z - 0.3, z1: z + 0.3, y0: 0, y1: 9 }); trees.push({ x, z, chunk: c.key }); k++;
+    }
+  };
+  let townName = null;
+  if (col) { road(cx - 4, cx + 4, z0, z0 + CH); clear.push([cx - 12, cx + 12, z0, z0 + CH]); }
+  if (rz !== null) { road(x0, x0 + CH, rz - 4, rz + 4); clear.push([x0, x0 + CH, rz - 12, rz + 12]); }
+  const roll = wrng();
+  if (col && rz !== null) { // a crossroads town
+    townName = TOWN_NAMES[mod(hash2(c.gi * 7, c.gj * 13), TOWN_NAMES.length)];
+    clear.push([cx - 32, cx + 32, z0, z0 + CH]);
+    let mi = mod(c.gi + c.gj, 6);
+    for (let z = z0 + 9; z < z0 + CH - 8; z += 20) for (const sd of [-1, 1]) {
+      if (Math.abs(z - rz) < 12) continue;
+      const w = 7 + wrng() * 2, d = 9 + wrng() * 2;
+      if (sd > 0 && z > rz && wrng() < 0.6) { house(cx + 8 + 4.5, z + 1, 9, 12, -1, mi++, { kind: 'shop', open: true, roadX: cx }); continue; }
+      const h = house(cx + sd * (8 + w / 2 + wrng() * 2), z + (wrng() - 0.5) * 2, w, d, -sd, mi++, { roadX: cx }); spawnPropsInHouse(h);
+    }
+    roadSign(cx + 6, rz + 6, 0, [townName, '']);
+  } else if (col && roll < 0.35) { // a village on the road
+    townName = 'Vila ' + TOWN_NAMES[mod(hash2(c.gi * 5, c.gj * 11), TOWN_NAMES.length)];
+    clear.push([cx - 30, cx + 30, z0, z0 + CH]);
+    let mi = mod(c.gi * 3 + c.gj, 6);
+    for (let z = z0 + 12; z < z0 + CH - 10; z += 24) for (const sd of [-1, 1]) {
+      if (wrng() < 0.3) continue;
+      const w = 7 + wrng() * 2, d = 9 + wrng() * 2;
+      const h = house(cx + sd * (8 + w / 2 + wrng() * 3), z + (wrng() - 0.5) * 3, w, d, -sd, mi++, { roadX: cx }); spawnPropsInHouse(h);
+    }
+    roadSign(cx + 6, z0 + 4, 0, [townName, '']);
+  } else if (col && roll < 0.5) { // a lone house by the road
+    const sd = wrng() < 0.5 ? -1 : 1, h = house(cx + sd * 14, cz, 8, 10, -sd, mod(c.gj, 6), { roadX: cx });
+    clear.push([cx + sd * 14 - 8, cx + sd * 14 + 8, cz - 8, cz + 8]); spawnPropsInHouse(h);
+  } else if (rz !== null && roll < 0.2) { // a gas station on the road
+    const gx = cx, gz = rz - 22; clear.push([gx - 20, gx + 20, gz - 12, rz]);
+    box(gx, 0, gz + 6, 22, 0.1, 10, MAT.concrete, false, 2);
+    pumpAt(gx - 4, gz + 7); pumpAt(gx + 4, gz + 7);
+    house(gx, gz - 4, 9, 10, 1, 3, { kind: 'shop', open: true, roadX: gx + 20 });
+    townName = 'Posto ' + TOWN_NAMES[mod(hash2(c.gi, c.gj * 3), TOWN_NAMES.length)];
+  } else if (rz !== null && roll < 0.4) { // a farmhouse beside the road
+    const fz = rz + 26; clear.push([cx - 40, cx + 40, rz, z0 + CH]);
+    const h = house(cx - 20, fz, 9, 11, 1, 1, { open: true, roadX: cx - 8 }); spawnPropsInHouse(h);
+    field(cx - 5, cx + 40, fz - 8, fz + 20);
+  } else if (!col && rz === null) {
+    if (roll < 0.12) { // a lake
+      const r = 18 + wrng() * 16, lx = cx + (wrng() - 0.5) * 20, lz = cz + (wrng() - 0.5) * 20;
+      const shore = mesh(new THREE.CircleGeometry(r + 4, 36), MAT2.mud, lx, 0.012, lz, world, false); shore.rotation.x = -Math.PI / 2;
+      const water = mesh(new THREE.CircleGeometry(r, 36), MAT2.water, lx, 0.05, lz, world, false); water.rotation.x = -Math.PI / 2;
+      lakes.push({ x: lx, z: lz, r: r - 1 });
+    } else if (roll < 0.2) { // a hunter's cabin in the woods
+      const h = house(cx, cz, 7, 9, -1, 5, { kind: 'cabin', open: true, roadX: cx - 6 });
+      furniture('pilha', cx + 6, cz - 6, 0); clear.push([cx - 12, cx + 12, cz - 12, cz + 12]); spawnPropsInHouse(h);
+    } else if (roll < 0.35) { // an abandoned field
+      field(x0 + 15, x0 + 85, z0 + 20, z0 + 80); clear.push([x0 + 10, x0 + 90, z0 + 15, z0 + 85]);
+    }
+  }
+  if ((col || rz !== null) && wrng() < 0.35) { // an abandoned car on the road
+    if (col) car(cx + (wrng() < 0.5 ? -2 : 2), z0 + 15 + wrng() * 70, (wrng() < 0.5 ? 0 : Math.PI) + (wrng() - 0.5) * 0.6, c.gi + c.gj);
+    else car(x0 + 15 + wrng() * 70, rz + (wrng() < 0.5 ? -2 : 2), Math.PI / 2 + (wrng() - 0.5) * 0.6, c.gi);
+  }
+  // woods: thick or thin by area, never on roads or in towns
+  const patch = Math.sin(cx * 0.021) * Math.cos(cz * 0.017) + Math.sin((cx + cz) * 0.011);
+  const base = townName ? 10 : col || rz !== null ? 25 : patch > -0.2 ? 85 : 20;
+  addTrees(LIGHT ? Math.round(base * 0.55) : base);
+  plantTrees(c, treesIn);
+  // gather what was built into the chunk
+  const kids = world.children.slice(n0.kids);
+  c.objs = kids.filter(o => !freeObjs.has(o) && !o.userData.chunked).concat(c.objs);
+  c.solids = solids.splice(n0.solids);
+  c.boxes = boxes.slice(n0.boxes); c.containers = containers.slice(n0.cont); c.doors = doors.slice(n0.doors);
+  c.props = props.slice(n0.props); c.cars = cars.slice(n0.cars); c.lakes = lakes.slice(n0.lakes); c.pumps = pumps.slice(n0.pumps);
+  c.lakeBodies = c.lakes.map(l => { const lb = new CANNON.Body({ mass: 0 }); lb.addShape(new CANNON.Cylinder(l.r, l.r, 2, 24)); lb.position.set(l.x, 0, l.z); phys.addBody(lb); return lb; });
+  for (const cn of c.containers) cn.items = rollLoot(cn.type);
+  if (save) { // put back what you did here last time
+    c.containers.forEach((cn, i) => { const sv = save.containers[i]; if (sv) Object.assign(cn, sv); });
+    for (const car of c.cars) removeCar(car);
+    c.cars = save.cars.map(sc => { const nc = car(sc.x, sc.z, sc.rot, sc.mi); nc.fuel = sc.fuel; return nc; });
+    c.pumps.forEach((pm, i) => { if (save.pumps[i] !== undefined) pm.uses = save.pumps[i]; });
+  } else for (const car of c.cars) car.fuel = Math.floor(wrng() * tune.car_start_fuel_max);
+  if (townName && !PLACES.some(p => p.name === townName)) PLACES.push({ name: townName, x: cx, z: rz !== null ? rz : cz, r: 60, gen: c.key });
+  world.updateMatrixWorld(true); bakeChunk(c); indexBoxes(c.boxes);
+  for (const o of c.objs) o.visible = c.on;
+  c.gen = true;
+}
+function removeCar(car) {
+  if (car.live) car.vehicle.removeFromWorld(phys);
+  world.remove(car.g); for (const w of car.wheels) world.remove(w);
+  const i = cars.indexOf(car); if (i >= 0) cars.splice(i, 1);
+}
+function disposeTree(o) { o.traverse(m => { if (m.isMesh && m.geometry && !m.geometry.userData.shared) m.geometry.dispose(); }); }
+function unloadChunk(c) {
+  const s = state;
+  // remember what you changed
+  saves.set(c.key, {
+    containers: c.containers.map(cn => ({ items: cn.items.slice(), searched: cn.searched, refillAt: cn.refillAt })),
+    cars: [], pumps: c.pumps.map(pm => pm.uses),
+  });
+  const sv = saves.get(c.key);
+  for (const car of c.cars) {
+    if (car === s.driving || Math.hypot(car.chassis.position.x - s.x, car.chassis.position.z - s.z) < 200) { orphanCars.add(car); continue; }
+    const p = car.chassis.position; sv.cars.push({ x: p.x, z: p.z, rot: carYaw(car), mi: 0, fuel: car.fuel }); removeCar(car);
+  }
+  for (const o of c.objs.concat(c.hidden || [])) { world.remove(o); disposeTree(o); }
+  for (const b of c.boxes) {
+    if (b.body && liveBoxes.has(b)) { phys.removeBody(b.body); liveBoxes.delete(b); }
+    for (let i = Math.floor(b.x0 / GRID); i <= Math.floor(b.x1 / GRID); i++) for (let j = Math.floor(b.z0 / GRID); j <= Math.floor(b.z1 / GRID); j++) {
+      const l = grid.get(gkey(i, j)); if (l) { const k = l.indexOf(b); if (k >= 0) l.splice(k, 1); }
+    }
+  }
+  const drop = (arr, list) => { const set = new Set(list); for (let i = arr.length - 1; i >= 0; i--) if (set.has(arr[i])) arr.splice(i, 1); };
+  drop(boxes, c.boxes); drop(containers, c.containers); drop(lakes, c.lakes); drop(pumps, c.pumps);
+  for (const d of c.doors) { world.remove(d.pivot); phys.removeBody(d.body); disposeTree(d.pivot); }
+  drop(doors, c.doors);
+  for (const pr of c.props) { if (pr === s.hold) s.hold = null; if (pr.live) phys.removeBody(pr.body); world.remove(pr.g); disposeTree(pr.g); }
+  drop(props, c.props);
+  for (const lb of c.lakeBodies) phys.removeBody(lb);
+  for (let i = trees.length - 1; i >= 0; i--) if (trees[i].chunk === c.key) trees.splice(i, 1);
+  chunks.delete(c.key); nearKey = '';
 }
 let aimTargets = [], nearKey = '';
 const liveBoxes = new Set();
 function updateChunks() {
   const s = state, R = Math.min(LIGHT ? tune.stream_radius_mobile : tune.stream_radius, world.fog.far + 25);
   let key = '';
-  for (const c of chunks) {
+  streamWorld(R);
+  if (groundMesh) groundMesh.position.set(Math.round(s.x / 5) * 5, 0, Math.round(s.z / 5) * 5);
+  for (const c of chunks.values()) {
     const dx = Math.max(c.x0 - s.x, 0, s.x - (c.x0 + CH)), dz = Math.max(c.z0 - s.z, 0, s.z - (c.z0 + CH)), d = Math.hypot(dx, dz);
     const on = d < R; if (on !== c.on) { c.on = on; for (const o of c.objs) o.visible = on; }
-    c.near = d < 60; if (c.near) key += c.i + ',' + c.j + ';';
+    c.near = d < 60; if (c.near) key += c.key + ';';
 
   }
   // fixed things (walls, furniture, trees) are physics bodies only within ~30 m of the player
@@ -1074,7 +1256,7 @@ function updateChunks() {
   }
   if (key !== nearKey) { // the rays only test what is close by
     nearKey = key; aimTargets = globalSolids.slice();
-    for (const c of chunks) if (c.near) for (const m of c.solids) aimTargets.push(m);
+    for (const c of chunks.values()) if (c.near) for (const m of c.solids) aimTargets.push(m);
   }
 }
 buildWorld();
@@ -1847,7 +2029,7 @@ function drawCompass() {
   const marks = [];
   for (const p of PLACES) {
     const dx = p.x - s.x, dz = p.z - s.z, dist = Math.hypot(dx, dz);
-    if (dist < p.r * 0.5) continue;
+    if (dist < p.r * 0.5 || dist > 900) continue;
     const rel = wrap(Math.atan2(dx, -dz) - heading); if (Math.abs(rel) > half) continue;
     const x = cx + rel / half * cw / 2;
     ctx.fillStyle = '#d9b46a'; ctx.beginPath(); ctx.moveTo(x, y + 9); ctx.lineTo(x + 5, y + 15); ctx.lineTo(x, y + 21); ctx.lineTo(x - 5, y + 15); ctx.fill();
