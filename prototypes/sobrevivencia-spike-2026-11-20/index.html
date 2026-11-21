@@ -1340,7 +1340,7 @@ function unloadChunk(c) {
   drop(boxes, c.boxes); drop(containers, c.containers); drop(lakes, c.lakes); drop(pumps, c.pumps);
   for (const d of c.doors) { world.remove(d.pivot); phys.removeBody(d.body); disposeTree(d.pivot); }
   drop(doors, c.doors);
-  for (const pr of c.props) { if (pr === s.hold) s.hold = null; if (pr.live) phys.removeBody(pr.body); world.remove(pr.g); disposeTree(pr.g); }
+  for (const pr of c.props) { if (pr === s.hold) s.hold = null; if (pr.body.world) phys.removeBody(pr.body); world.remove(pr.g); disposeTree(pr.g); }
   drop(props, c.props);
   for (const lb of c.lakeBodies) phys.removeBody(lb);
   for (let i = trees.length - 1; i >= 0; i--) if (trees[i].chunk === c.key) trees.splice(i, 1);
@@ -1434,6 +1434,10 @@ function poseHero(x, z) {
   h.arms[0].rotation.x = -sw * 0.8 * (1 - c) + 1.25 * c + reach; h.arms[1].rotation.x = sw * 0.8 * (1 - c) + 1.25 * c - reach;
   h.arms[0].rotation.z = -0.08; h.arms[1].rotation.z = 0.08;
   heldAxe.visible = !!s.chop;
+  if (s.hold && !s.chop && sk < 0.5) { // both hands around the object, out in front of the chest
+    const big = PROP[s.hold.kind].mass > 3;
+    h.arms[0].rotation.set(big ? 1.15 : 1.3, 0, big ? 0.42 : 0.3); h.arms[1].rotation.set(big ? 1.15 : 1.3, 0, big ? -0.42 : -0.3);
+  }
   if (s.chop) { // wind up over the shoulder, then a fast blow
     const w = s.chop.swing, a = w < 0.55 ? 1.6 + (w / 0.55) * 1.4 : 3.0 - Math.min(1, (w - 0.55) / 0.12) * 2.3;
     h.arms[0].rotation.set(a, 0, 0.35); h.arms[1].rotation.set(a, 0, -0.05); h.torso.rotation.x = w < 0.55 ? 0.12 : -0.3; h.torso.rotation.y = 0.5;
@@ -1450,7 +1454,7 @@ function poseHero(x, z) {
   }
   // a gun in hand: arms forward along the aim, the off hand under long guns
   for (const id in gunMeshes) gunMeshes[id].visible = id === s.gun && !s.chop && !s.search;
-  if (s.gun && !s.driving && !s.chop && !s.search && !(s.pickAnim > 0) && sk < 0.5) {
+  if (s.gun && !s.hold && !s.driving && !s.chop && !s.search && !(s.pickAnim > 0) && sk < 0.5) {
     const up = s.pitch * 0.9, rl = s.reload ? 0.5 : 0, long = s.gun !== 'pistola';
     h.arms[1].rotation.set(Math.PI / 2 + up - rl + (s.kick || 0) * 0.35, 0, 0.05);
     h.arms[0].rotation.set(Math.PI / 2 + up - (long ? 0.1 : 0) - rl * 1.5, 0, long ? 0.6 : 0.35);
@@ -1642,22 +1646,35 @@ function nearestProp() {
 function grabOrThrow() {
   const s = state;
   if (s.hold) {
-    const b = s.hold.body, fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw), cp = Math.cos(s.pitch);
-    b.velocity.set(fx * cp * tune.throw_speed, Math.sin(s.pitch) * tune.throw_speed + 2.5, fz * cp * tune.throw_speed);
-    say('Jogou: ' + PROP[s.hold.kind].name); s.hold = null; sfx.chop(); return;
+    const fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw), cp = Math.cos(s.pitch), k = PROP[s.hold.kind].name;
+    releaseProp(fx * cp * tune.throw_speed, Math.sin(s.pitch) * tune.throw_speed + 2.5, fz * cp * tune.throw_speed);
+    say('Jogou: ' + k); sfx.chop(); s.pickAnim = 0; return;
   }
   const pr = nearestProp();
-  if (pr) { s.hold = pr; pr.body.wakeUp(); say(`Segurando: ${PROP[pr.kind].name}  ·  G para jogar`); sfx.pick(); }
+  if (pr) { if (s.gun) { s.gun = null; s.aiming = false; } s.hold = pr; say(`Segurando: ${PROP[pr.kind].name}  ·  ${TOUCH ? 'PEGAR' : 'G'} para jogar`); sfx.pick(); }
   else say('Nada perto para pegar.');
 }
-function dropProp() { state.hold = null; }
+function dropProp() { releaseProp(); }
+// A held object leaves the physics world and rides in the hands; throwing or dropping puts it back.
 function holdProp(dt) {
   const s = state, pr = s.hold; if (!pr) return;
-  const b = pr.body, fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw);
-  const tx = s.x + fx * 0.85, ty = s.y + 1.15, tz = s.z + fz * 0.85;
-  if (Math.hypot(b.position.x - tx, b.position.z - tz) > 2.5) { s.hold = null; return; } // snagged on something
-  b.wakeUp(); b.velocity.set((tx - b.position.x) * 12, (ty - b.position.y) * 12, (tz - b.position.z) * 12);
-  b.angularVelocity.scale(0.8, b.angularVelocity);
+  const b = pr.body;
+  if (b.world) phys.removeBody(b);
+  let tx, ty, tz, yaw;
+  if (viewMode === 1) { // first person: in front of the eyes, low
+    yaw = s.yaw; const fx = -Math.sin(yaw), fz = -Math.cos(yaw); tx = s.x + fx * 0.55; ty = s.y + 1.25; tz = s.z + fz * 0.55;
+  } else { // third person: between the two hands, in front of the chest
+    yaw = s.face; const fx = -Math.sin(yaw), fz = -Math.cos(yaw), big = PROP[pr.kind].mass > 3;
+    const reach = big ? 0.62 : 0.55, hgt = (big ? 1.12 : 1.22) - 0.3 * (s.crouch || 0) - 0.25 * (s.swimK || 0);
+    tx = s.x + fx * reach; ty = s.y + hgt; tz = s.z + fz * reach;
+  }
+  b.position.set(tx, ty, tz); b.velocity.setZero(); b.angularVelocity.setZero();
+  b.quaternion.setFromEuler(0, yaw, 0); syncProp(pr);
+}
+function releaseProp(vx = 0, vy = 0, vz = 0) {
+  const s = state, pr = s.hold; if (!pr) return;
+  const b = pr.body; if (!b.world) phys.addBody(b);
+  b.velocity.set(vx, vy, vz); b.wakeUp(); s.hold = null;
 }
 
 // ---- Weapons ------------------------------------------------------------------------------------
@@ -1701,6 +1718,7 @@ function getGun(gid) {
 function cycleGun(dir = 1) {
   const s = state, owned = Object.keys(GUNS).filter(g => s.guns[g].has); if (!owned.length) { say('Você não tem nenhuma arma.'); return; }
   const list = [null, ...owned], i = list.indexOf(s.gun);
+  if (s.hold) releaseProp();
   s.gun = list[(i + dir + list.length) % list.length]; s.reload = null; s.aiming = false; sfx.gunPick();
   say(s.gun ? `Empunhou: ${GUN_NAMES[s.gun]}` : 'Arma guardada');
 }
@@ -2312,9 +2330,10 @@ const scenes = {
       const s = state; s.t += dt; s.px = s.x; s.pz = s.z;
       // look
       if (lookX || lookY) s.lookT = 0;
-      s.yaw -= lookX * tune.mouse_sens; s.pitch -= lookY * tune.mouse_sens; lookX = lookY = 0;
-      if (down.has('ArrowLeft')) s.yaw += tune.turn_speed * dt;
-      if (down.has('ArrowRight')) s.yaw -= tune.turn_speed * dt;
+      const zoomK = camera.fov / 72; // slower look when zoomed in
+      s.yaw -= lookX * tune.mouse_sens * zoomK; s.pitch -= lookY * tune.mouse_sens * zoomK; lookX = lookY = 0;
+      if (down.has('ArrowLeft')) s.yaw += tune.turn_speed * dt * zoomK;
+      if (down.has('ArrowRight')) s.yaw -= tune.turn_speed * dt * zoomK;
       s.pitch = viewMode === 3 ? Math.max(-1.0, Math.min(0.75, s.pitch)) : Math.max(-1.4, Math.min(1.4, s.pitch));
       if (pressed('KeyV')) { viewMode = viewMode === 3 ? 1 : 3; say(viewMode === 3 ? 'Câmera: terceira pessoa' : 'Câmera: primeira pessoa'); sfx.click(); }
       // move
@@ -2345,6 +2364,7 @@ const scenes = {
         s.airVy = onGround ? 0 : Math.min(s.airVy, pb.velocity.y); s.air = !onGround;
         s.swim = inWater(pb.position.x, pb.position.z);
         if (s.swim && s.gun) { s.gun = null; s.aiming = false; say('Arma guardada para nadar.'); }
+        if (s.swim && s.hold && PROP[s.hold.kind].mass > 3) { releaseProp(); say('Soltou o objeto para nadar.'); }
         if (onGround && !s.swim && pressed('Space') && !s.craftOpen) { pb.velocity.y = tune.jump_speed; s.air = true; sfx.step(); }
       }
       holdProp(dt); stepDoors(dt);
