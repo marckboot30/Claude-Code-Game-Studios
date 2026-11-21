@@ -30,7 +30,11 @@ window.CONFIG = {
 
   // --- Fabricação ---
   stack_max: { value: 5, min: 1, max: 20, step: 1 },           // materiais por espaço da mochila
-  chop_time: { value: 3.5, min: 0.5, max: 10, step: 0.25 },     // segundos segurando E numa árvore para 1 lenha
+  swing_time: { value: 0.85, min: 0.3, max: 3, step: 0.05 },    // segundos por machadada
+  tree_hits: { value: 4, min: 1, max: 12, step: 1 },            // machadadas para derrubar uma árvore
+  tree_wood: { value: 4, min: 1, max: 10, step: 1 },            // lenhas que uma árvore dá
+  swim_speed: { value: 1.6, min: 0.5, max: 5, step: 0.1 },      // m/s nadando
+  swim_hunger_mult: { value: 1.8, min: 1, max: 4, step: 0.1 },  // nadar gasta mais fome
   chop_reach: { value: 1.6, min: 0.8, max: 3, step: 0.1 },      // m até o tronco
   craft_extra_slots: { value: 3, min: 1, max: 6, step: 1 },     // espaços a mais da mochila reforçada
   fire_hours: { value: 6, min: 1, max: 24, step: 0.5 },         // horas de jogo que a fogueira fica acesa

@@ -319,7 +319,16 @@ function noise(dur, freq, vol = 0.2, q = 1, delay = 0) {
   s.connect(f).connect(g).connect(audio.out); s.start(t, (t * 7.3) % 1.5); s.stop(t + dur + 0.05);
 }
 const sfx = {
-  step: () => noise(0.12, 260, 0.12, 0.8),
+  step: (k = 'grama') => {
+    if (k === 'asfalto') { noise(0.06, 900, 0.14, 1.5); noise(0.05, 300, 0.1, 1); }
+    else if (k === 'madeira') { tone(150 + (seed & 31), 0.07, 'triangle', 0.12, -40); noise(0.05, 700, 0.08, 2); }
+    else if (k === 'terra') noise(0.1, 450, 0.13, 0.9);
+    else { noise(0.12, 1800, 0.05, 0.7); noise(0.1, 260, 0.1, 0.8); }
+  },
+  splash: () => { noise(0.25, 1200, 0.18, 0.8); noise(0.35, 500, 0.12, 0.6, 0.05); },
+  axe: () => { noise(0.08, 320, 0.45, 1.4); tone(140, 0.12, 'triangle', 0.25, -50); noise(0.04, 2500, 0.15, 3); },
+  treeCreak: () => { for (let i = 0; i < 5; i++) tone(80 + i * 12, 0.35, 'sawtooth', 0.04, 30, ); noise(1.2, 220, 0.15, 3, 0.1); },
+  treeCrash: () => { noise(0.9, 160, 0.5, 0.6); noise(0.6, 900, 0.25, 0.8, 0.05); tone(45, 0.6, 'sine', 0.4, -15); },
   rustle: () => noise(0.18, 1800 + (seed & 511), 0.08, 2),
   pick: () => { tone(520, 0.08, 'triangle', 0.12); tone(780, 0.12, 'triangle', 0.1); },
   empty: () => tone(180, 0.25, 'sine', 0.12, -60),
@@ -481,7 +490,7 @@ const PRODUCTS = [0.02, 0.1, 0.17, 0.33, 0.55, 0.62, 0.8].map(h => new THREE.Mes
 const phys = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
 phys.broadphase = new CANNON.SAPBroadphase(phys); phys.allowSleep = true;
 phys.defaultContactMaterial.friction = 0.4; phys.defaultContactMaterial.restitution = 0.1;
-const G_WORLD = 1, G_PLAYER = 2;
+const G_WORLD = 1, G_PLAYER = 2, G_WATER = 4; // water stops cars and objects; you swim through it
 const slipMat = new CANNON.Material('slip');
 phys.addContactMaterial(new CANNON.ContactMaterial(slipMat, phys.defaultMaterial, { friction: 0, restitution: 0 }));
 { const ground = new CANNON.Body({ mass: 0, material: phys.defaultMaterial }); ground.addShape(new CANNON.Plane()); ground.quaternion.setFromEuler(-Math.PI / 2, 0, 0); phys.addBody(ground); }
@@ -491,6 +500,7 @@ function staticBody(b) { // b: {x0,x1,z0,z1,y0,y1}
   body.position.set((b.x0 + b.x1) / 2, (y0 + y1) / 2, (b.z0 + b.z1) / 2); return body;
 }
 const playerBody = new CANNON.Body({ mass: 70, fixedRotation: true, material: slipMat, collisionFilterGroup: G_PLAYER, collisionFilterMask: G_WORLD });
+const inWater = (x, z) => lakes.some(l => Math.hypot(x - l.x, z - l.z) < l.r - 0.5);
 playerBody.addShape(new CANNON.Sphere(0.3), new CANNON.Vec3(0, 0.3, 0)); playerBody.addShape(new CANNON.Sphere(0.3), new CANNON.Vec3(0, 0.85, 0)); playerBody.addShape(new CANNON.Sphere(0.28), new CANNON.Vec3(0, 1.4, 0));
 playerBody.allowSleep = false; phys.addBody(playerBody);
 function groundBelow(x, y, z, len) { // distance to whatever is under (x, y, z), or Infinity
@@ -820,8 +830,13 @@ function buildWorld() {
 // ---- The wider map ----------------------------------------------------------------------------
 // Roads are flat boxes; asphalt roads get a dashed centre line, dirt tracks do not.
 const roadRects = [], footprints = [];
+function groundKind(x, z) {
+  for (const r of footprints) if (x > r[0] + 0.5 && x < r[1] - 0.5 && z > r[2] + 0.5 && z < r[3] - 0.5) return 'madeira';
+  for (const r of roadRects) if (x > r[0] && x < r[1] && z > r[2] && z < r[3]) return r[4] || 'asfalto';
+  return 'grama';
+}
 function road(x0, x1, z0, z1, mat = MAT.asphalt) {
-  roadRects.push([x0 - 1.5, x1 + 1.5, z0 - 1.5, z1 + 1.5]);
+  roadRects.push([x0 - 1.5, x1 + 1.5, z0 - 1.5, z1 + 1.5, mat === MAT.asphalt ? 'asfalto' : 'terra']);
   const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, sx = x1 - x0, sz = z1 - z0;
   box(cx, -0.015, cz, sx, 0.04, sz, mat, false, 6);
   if (mat !== MAT.asphalt) return;
@@ -998,12 +1013,13 @@ function buildForest() {
     if (edge < 260 && patch < -0.2 && wrng() < 0.85) continue;
     const tr = makeTree(x, z);
     const c = chunkOf(x, z); if (!byChunk.has(c)) byChunk.set(c, []); byChunk.get(c).push(tr);
-    if (x > BOUND.x0 - 2 && x < BOUND.x1 + 2 && z > BOUND.z0 - 2 && z < BOUND.z1 + 2) { boxes.push({ x0: x - 0.3, x1: x + 0.3, z0: z - 0.3, z1: z + 0.3, y0: 0, y1: 9 }); trees.push({ x, z }); }
+    if (x > BOUND.x0 - 2 && x < BOUND.x1 + 2 && z > BOUND.z0 - 2 && z < BOUND.z1 + 2) { const bx = { x0: x - 0.3, x1: x + 0.3, z0: z - 0.3, z1: z + 0.3, y0: 0, y1: 9 }; boxes.push(bx); tr.rec = { x, z, box: bx }; trees.push(tr.rec); }
     n++;
   }
   for (const [c, list] of byChunk) plantTrees(c, list);
 }
 // One set of instanced meshes per chunk, so a far chunk's trees switch off (and unload) with it.
+const felled = new Set(); const treeKey = (x, z) => x.toFixed(1) + ',' + z.toFixed(1);
 const TRUNK_G = new THREE.CylinderGeometry(0.2, 0.32, 1, 7), CROWN_G = new THREE.IcosahedronGeometry(1, 1);
 TRUNK_G.userData.shared = CROWN_G.userData.shared = true;
 function makeTree(x, z) {
@@ -1021,11 +1037,13 @@ function plantTrees(c, list) {
     const cn = [0, 0, 0];
     list.forEach((t, i) => {
       m4.compose(v.set(t.x, t.h / 2, t.z), q.identity(), sc.set(1, t.h, 1)); trunks.setMatrixAt(i, m4);
+      const inst = { trunk: [trunks, i], crowns: [], h: t.h, data: t.crowns };
       for (const cr of t.crowns) {
         e.set(cr.ex, cr.ey, 0); q.setFromEuler(e);
         m4.compose(v.set(t.x + cr.ox, t.h + cr.k * 1.2 - 0.4, t.z + cr.oz), q, sc.set(cr.r, cr.r * 0.9, cr.r));
-        crowns[cr.ci].setMatrixAt(cn[cr.ci]++, m4);
+        inst.crowns.push([crowns[cr.ci], cn[cr.ci]]); crowns[cr.ci].setMatrixAt(cn[cr.ci]++, m4);
       }
+      if (t.rec) t.rec.inst = inst;
     });
     trunks.castShadow = true; world.add(trunks); c.objs.push(trunks); trunks.userData.chunked = true;
     crowns.forEach((m, i) => { m.count = cn[i]; m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); world.add(m); c.objs.push(m); m.userData.chunked = true; });
@@ -1158,7 +1176,8 @@ function genChunk(c) {
       if (clear.some(r => x > r[0] && x < r[1] && z > r[2] && z < r[3])) continue;
       if (Math.abs(z - nearestRowZ(z)) < 11 || Math.abs(x - Math.round(x / 600) * 600) < 11) continue; // roadsides
       if (lakes.slice(n0.lakes).some(l => Math.hypot(x - l.x, z - l.z) < l.r + 6)) continue;
-      treesIn.push(makeTree(x, z)); boxes.push({ x0: x - 0.3, x1: x + 0.3, z0: z - 0.3, z1: z + 0.3, y0: 0, y1: 9 }); trees.push({ x, z, chunk: c.key }); k++;
+      if (felled.has(treeKey(x, z))) continue;
+      const tr = makeTree(x, z), bx = { x0: x - 0.3, x1: x + 0.3, z0: z - 0.3, z1: z + 0.3, y0: 0, y1: 9 }; boxes.push(bx); tr.rec = { x, z, chunk: c.key, box: bx }; trees.push(tr.rec); treesIn.push(tr); k++;
     }
   };
   let townName = null;
@@ -1227,7 +1246,7 @@ function genChunk(c) {
   c.solids = solids.splice(n0.solids);
   c.boxes = boxes.slice(n0.boxes); c.containers = containers.slice(n0.cont); c.doors = doors.slice(n0.doors);
   c.props = props.slice(n0.props); c.cars = cars.slice(n0.cars); c.lakes = lakes.slice(n0.lakes); c.pumps = pumps.slice(n0.pumps);
-  c.lakeBodies = c.lakes.map(l => { const lb = new CANNON.Body({ mass: 0 }); lb.addShape(new CANNON.Cylinder(l.r, l.r, 2, 24)); lb.position.set(l.x, 0, l.z); phys.addBody(lb); return lb; });
+  c.lakeBodies = c.lakes.map(l => { const lb = new CANNON.Body({ mass: 0, collisionFilterGroup: G_WATER }); lb.addShape(new CANNON.Cylinder(l.r, l.r, 2, 24)); lb.position.set(l.x, 0, l.z); phys.addBody(lb); return lb; });
   for (const cn of c.containers) cn.items = fillContainer(cn);
   if (save) { // put back what you did here last time
     c.containers.forEach((cn, i) => { const sv = save.containers[i]; if (sv) Object.assign(cn, sv); });
@@ -1310,7 +1329,7 @@ function updateChunks() {
 buildWorld();
 chunkWorld(); bakeChunks(); indexBoxes();
 for (const d of doors) globalSolids.push(d.leaf); // the camera stops in front of doors
-for (const l of lakes) { const lb = new CANNON.Body({ mass: 0 }); lb.addShape(new CANNON.Cylinder(l.r, l.r, 2, 24)); lb.position.set(l.x, 0, l.z); phys.addBody(lb); }
+for (const l of lakes) { const lb = new CANNON.Body({ mass: 0, collisionFilterGroup: G_WATER }); lb.addShape(new CANNON.Cylinder(l.r, l.r, 2, 24)); lb.position.set(l.x, 0, l.z); phys.addBody(lb); }
 for (const h of houses) spawnPropsInHouse(h);
 for (let i = 0; i < 14; i++) spawnProp(i % 2 ? 'pneu' : 'balde', (wrng() - 0.5) * 8, 0.5, 120 - i * 18 + wrng() * 6, wrng() * 6);
 
@@ -1321,7 +1340,7 @@ let viewMode = 3; // 3: over the shoulder, 1: through the eyes (V or the camera 
 const hero = (() => {
   const C = (c, r = 0.85) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
   const skin = C(0xb88a6c, 0.7), jacket = C(0x4b5340), pants = C(0x30363f), boots = C(0x2b231d), cap = C(0x6b5a3f), pack = C(0x5b4a33), strap = C(0x2e2a24);
-  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); world.add(root);
+  const root = new THREE.Group(), body = new THREE.Group(); root.rotation.order = 'YXZ'; root.add(body); world.add(root);
   const part = (geo, mat, x, y, z, parent) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
   const legs = [-0.11, 0.11].map(x => {
     const pv = new THREE.Group(); pv.position.set(x, 0.95, 0); root.add(pv);
@@ -1352,19 +1371,34 @@ const hero = (() => {
 function lerpAngle(a, b, t) { let d = ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI; return a + d * t; }
 function poseHero(x, z) {
   const s = state, h = hero, c = s.crouch || 0;
-  h.root.position.set(x, s.y || 0, z); h.root.rotation.y = s.face;
+  const sk = s.swimK || 0;
+  h.root.position.set(x, (s.y || 0) - 0.25 * sk, z); h.root.rotation.y = s.face; h.root.rotation.x = -1.25 * sk;
   const amp = s.speedNow > 4.5 ? 0.85 : 0.5, sw = Math.sin(s.bob * 1.4) * amp * Math.min(1, s.speedNow / 2);
   h.legs[0].rotation.x = sw * (1 - c); h.legs[1].rotation.x = -sw * (1 - c);
   h.legs[0].scale.y = h.legs[1].scale.y = 1 - 0.32 * c;
   h.torso.position.y = 0.95 - 0.3 * c + Math.abs(Math.sin(s.bob * 1.4)) * 0.03 * Math.min(1, s.speedNow / 2);
   h.torso.rotation.x = -0.45 * c - (s.speedNow > 4.5 ? 0.15 : 0);
-  const reach = c > 0.5 ? Math.sin(s.t * 9) * 0.25 : 0;
-  h.arms[0].rotation.x = -sw * 0.8 * (1 - c) - 1.1 * c + reach; h.arms[1].rotation.x = sw * 0.8 * (1 - c) - 1.1 * c - reach;
+  const reach = c > 0.5 ? Math.sin(s.t * 9) * 0.35 : 0; // rummaging: hands in and out of the furniture
+  h.arms[0].rotation.x = -sw * 0.8 * (1 - c) + 1.25 * c + reach; h.arms[1].rotation.x = sw * 0.8 * (1 - c) + 1.25 * c - reach;
   h.arms[0].rotation.z = -0.08; h.arms[1].rotation.z = 0.08;
-  if (s.chop) { const k = Math.sin(s.chop.p * Math.PI * 10); h.arms[0].rotation.x = h.arms[1].rotation.x = -1.7 + k * 0.9; h.torso.rotation.x = -0.1 - k * 0.15; }
+  heldAxe.visible = !!s.chop;
+  if (s.chop) { // wind up over the shoulder, then a fast blow
+    const w = s.chop.swing, a = w < 0.55 ? 1.6 + (w / 0.55) * 1.4 : 3.0 - Math.min(1, (w - 0.55) / 0.12) * 2.3;
+    h.arms[0].rotation.set(a, 0, 0.35); h.arms[1].rotation.set(a, 0, -0.05); h.torso.rotation.x = w < 0.55 ? 0.12 : -0.3; h.torso.rotation.y = 0.5;
+  }
+  if (s.pickAnim > 0) { // bend, then reach back to the backpack
+    const k = 1 - s.pickAnim / 0.7;
+    if (k < 0.45) { h.torso.rotation.x = -0.6 * (k / 0.45); h.arms[1].rotation.x = 0.4; }
+    else { h.torso.rotation.x = -0.6 * (1 - (k - 0.45) / 0.55); h.arms[1].rotation.set(-2.4 * ((k - 0.45) / 0.55) + 0.4, 0, -0.3); }
+  }
+  if (sk > 0.5) { // crawl strokes and a flutter kick
+    const ph = s.t * 3.2;
+    h.arms[0].rotation.set(Math.PI + Math.sin(ph) * 1.6, 0, 0.2); h.arms[1].rotation.set(Math.PI + Math.sin(ph + Math.PI) * 1.6, 0, -0.2);
+    h.legs[0].rotation.x = 0.55 + Math.sin(ph * 2.2) * 0.25; h.legs[1].rotation.x = 0.55 - Math.sin(ph * 2.2) * 0.25; h.torso.rotation.x = 0.25; // legs trail low in the water
+  }
   // a gun in hand: arms forward along the aim, the off hand under long guns
-  for (const id in gunMeshes) gunMeshes[id].visible = id === s.gun;
-  if (s.gun && !s.driving) {
+  for (const id in gunMeshes) gunMeshes[id].visible = id === s.gun && !s.chop && !s.search;
+  if (s.gun && !s.driving && !s.chop && !s.search && !(s.pickAnim > 0) && sk < 0.5) {
     const up = s.pitch * 0.9, rl = s.reload ? 0.5 : 0, long = s.gun !== 'pistola';
     h.arms[1].rotation.set(Math.PI / 2 + up - rl + (s.kick || 0) * 0.15, 0, 0.05);
     h.arms[0].rotation.set(Math.PI / 2 + up - (long ? 0.1 : 0) - rl * 1.5, 0, long ? 0.6 : 0.35);
@@ -1586,6 +1620,10 @@ const heldGun = new THREE.Group(); heldGun.rotation.x = -Math.PI / 2; // in the 
 const viewGun = new THREE.Group(); camera.add(viewGun);                // first-person view model
 const gunMeshes = {}, viewMeshes = {};
 hero.hand.add(heldGun);
+const heldAxe = new THREE.Group(); heldAxe.rotation.x = -Math.PI / 2; hero.hand.add(heldAxe);
+{ const hm = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.75, 6), GUNMAT.wood); hm.rotation.x = Math.PI / 2; hm.position.z = -0.25; heldAxe.add(hm);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.17, 0.12), GUNMAT.steel); head.position.set(0, 0.06, -0.58); heldAxe.add(head);
+  const edge = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.2, 0.04), new THREE.MeshStandardMaterial({ color: 0xb8bcc0, metalness: 0.9, roughness: 0.25 })); edge.position.set(0, 0.13, -0.58); heldAxe.add(edge); heldAxe.visible = false; }
 for (const id in GUNS) { gunMeshes[id] = makeGunMesh(id); heldGun.add(gunMeshes[id]); viewMeshes[id] = makeGunMesh(id); viewGun.add(viewMeshes[id]); }
 const muzzleLight = new THREE.PointLight(0xffc070, 0, 8, 2); world.add(muzzleLight);
 const flashMat = new THREE.MeshBasicMaterial({ color: 0xffd28a, transparent: true, opacity: 0.9, depthWrite: false });
@@ -1788,6 +1826,42 @@ function stepAnimals(dt) {
     a.head.rotation.x = a.mode === 'idle' ? 0.5 + Math.sin(s.t * 1.3 + a.x) * 0.1 : 0; // grazing
   }
 }
+const ZERO_M = new THREE.Matrix4().makeScale(0, 0, 0), stumps = [], logs = [];
+const LEAFMATS = [MAT.leafA, MAT.leafB, MAT.leafC];
+function fellTree(rec, fromX, fromZ) {
+  const s = state, inst = rec.inst; if (!inst) return;
+  // hide the standing tree and its collision
+  inst.trunk[0].setMatrixAt(inst.trunk[1], ZERO_M); inst.trunk[0].instanceMatrix.needsUpdate = true;
+  for (const [im, i] of inst.crowns) { im.setMatrixAt(i, ZERO_M); im.instanceMatrix.needsUpdate = true; }
+  const b = rec.box; if (b.body && liveBoxes.has(b)) { phys.removeBody(b.body); liveBoxes.delete(b); }
+  for (let i = Math.floor(b.x0 / GRID); i <= Math.floor(b.x1 / GRID); i++) for (let j = Math.floor(b.z0 / GRID); j <= Math.floor(b.z1 / GRID); j++) { const l = grid.get(gkey(i, j)); if (l) { const k = l.indexOf(b); if (k >= 0) l.splice(k, 1); } }
+  trees.splice(trees.indexOf(rec), 1); felled.add(treeKey(rec.x, rec.z));
+  // a stump stays
+  const st = mesh(new THREE.CylinderGeometry(0.24, 0.32, 0.45, 8), MAT.bark, rec.x, 0.22, rec.z); stumps.push(st);
+  mesh(new THREE.CircleGeometry(0.24, 8), PARTMAT.wood, rec.x, 0.451, rec.z, world, false).rotation.x = -Math.PI / 2;
+  // the trunk and crown fall as one physics body, away from the axe
+  const g = new THREE.Group(); world.add(g);
+  mesh(new THREE.CylinderGeometry(0.2, 0.3, inst.h - 0.45, 7), MAT.bark, 0, 0, 0, g);
+  for (const cr of inst.data) { const c = mesh(CROWN_G, LEAFMATS[cr.ci], cr.ox, (inst.h - 0.45) / 2 + cr.k * 1.2 - 0.4, cr.oz, g); c.scale.set(cr.r, cr.r * 0.9, cr.r); c.rotation.set(cr.ex, cr.ey, 0); }
+  const body = new CANNON.Body({ mass: 250, material: phys.defaultMaterial, angularDamping: 0.3 });
+  body.addShape(new CANNON.Cylinder(0.25, 0.3, inst.h - 0.45, 8)); body.addShape(new CANNON.Sphere(1.6), new CANNON.Vec3(0, (inst.h - 0.45) / 2 + 0.5, 0));
+  body.position.set(rec.x, 0.45 + (inst.h - 0.45) / 2 + 0.05, rec.z);
+  const away = new CANNON.Vec3(rec.x - fromX, 0, rec.z - fromZ); away.normalize();
+  body.angularVelocity.set(away.z * 0.6, 0, -away.x * 0.6); // tip over, away from you
+  phys.addBody(body); logs.push({ g, body, t: 9, landed: false });
+  sfx.treeCreak();
+}
+function stepLogs(dt) {
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const L = logs[i]; L.t -= dt; L.g.position.copy(L.body.position); L.g.quaternion.copy(L.body.quaternion);
+    const up = L.body.quaternion.vmult(new CANNON.Vec3(0, 1, 0)).y;
+    if (!L.landed && up < 0.35) { L.landed = true; sfx.treeCrash(); burst(new THREE.Vector3(L.body.position.x, 0.3, L.body.position.z), 14, PARTMAT.wood, 3); }
+    if (L.t <= 0) { // the fallen tree breaks up into the firewood you were given
+      L.g.scale.multiplyScalar(0.9);
+      if (L.g.scale.x < 0.05) { world.remove(L.g); phys.removeBody(L.body); logs.splice(i, 1); }
+    }
+  }
+}
 function carcassNear() {
   let best = null, bd = 2.2;
   for (const a of animals) if (a.dead && !a.skinned) { const d = Math.hypot(a.x - state.x, a.z - state.z); if (d < bd) { bd = d; best = a; } }
@@ -1916,12 +1990,12 @@ function placeCamera(alpha = 1) {
   }
   if (viewMode === 1 || scene === 'title') {
     hero.root.visible = false;
-    camera.position.set(x, (s.y || 0) + 1.62 - 0.45 * (s.crouch || 0) + Math.sin(s.bob) * 0.035, z); return;
+    camera.position.set(x, (s.y || 0) + 1.62 - 0.45 * (s.crouch || 0) - 1.25 * (s.swimK || 0) + Math.sin(s.bob) * 0.035, z); return;
   }
   poseHero(x, z);
   // over the shoulder: back along the view, to the right, pulled in when a wall is in the way
   const cp = Math.cos(s.pitch), sy = Math.sin(s.yaw), cy = Math.cos(s.yaw);
-  _o.set(x, (s.y || 0) + 1.55 - 0.3 * (s.crouch || 0), z);
+  _o.set(x, (s.y || 0) + 1.55 - 0.3 * (s.crouch || 0) - 1.0 * (s.swimK || 0), z);
   const cd = s.aiming ? tune.cam_distance * 0.5 : tune.cam_distance;
   _v.set(sy * cp * cd + cy * tune.cam_shoulder, tune.cam_height - Math.sin(s.pitch) * cd,
     cy * cp * cd - sy * tune.cam_shoulder);
@@ -1936,7 +2010,7 @@ function placeCamera(alpha = 1) {
     const side = Math.abs(tx * _v.z - tz * _v.x) / hl; if (side < 0.5) d = Math.max(0.2, Math.min(d, along / hl - 0.45));
   }
   camera.position.copy(_o).addScaledVector(_v, d);
-  if (camera.position.y < 0.25) camera.position.y = 0.25;
+  if (camera.position.y < (s.swim ? 0.6 : 0.25)) camera.position.y = s.swim ? 0.6 : 0.25;
   hero.root.visible = d > 0.7; // too close to the head: hide the body rather than look through it
 }
 function collide(p) {
@@ -2164,7 +2238,7 @@ const scenes = {
       else {
         let vx = 0, vz = 0;
         if (moving) {
-          const len = Math.hypot(f, st) / mag, sp = (running ? tune.run_speed : tune.walk_speed) * (s.health < 25 ? 0.75 : 1);
+          const len = Math.hypot(f, st) / mag, sp = (s.swim ? tune.swim_speed : running ? tune.run_speed : tune.walk_speed) * (s.health < 25 ? 0.75 : 1);
           const sy = Math.sin(s.yaw), cy = Math.cos(s.yaw);
           vx = (-sy * f + cy * st) / len * sp; vz = (-cy * f - sy * st) / len * sp;
         }
@@ -2175,7 +2249,9 @@ const scenes = {
           const hurt = (-s.airVy - tune.fall_safe_speed) * tune.fall_damage; s.health -= hurt; say(`Queda feia: -${Math.round(hurt)} de saúde.`); sfx.thud();
         }
         s.airVy = onGround ? 0 : Math.min(s.airVy, pb.velocity.y); s.air = !onGround;
-        if (onGround && pressed('Space') && !s.craftOpen) { pb.velocity.y = tune.jump_speed; s.air = true; sfx.step(); }
+        s.swim = inWater(pb.position.x, pb.position.z);
+        if (s.swim && s.gun) { s.gun = null; s.aiming = false; say('Arma guardada para nadar.'); }
+        if (onGround && !s.swim && pressed('Space') && !s.craftOpen) { pb.velocity.y = tune.jump_speed; s.air = true; sfx.step(); }
       }
       holdProp(dt); stepDoors(dt);
       phys.step(STEP);
@@ -2186,12 +2262,13 @@ const scenes = {
         if (s.gun && !s.driving) s.face = lerpAngle(s.face, s.yaw, Math.min(1, 14 * dt));
         else if (moved > 0.001 && !s.driving) s.face = lerpAngle(s.face, Math.atan2(-(s.x - s.px), -(s.z - s.pz)), Math.min(1, 12 * dt));
         s.bob += moved * 3.2; s.walked += moved;
-        if (!s.driving && !s.air && s.walked > (running ? 1.6 : 1.35)) { s.walked = 0; sfx.step(); }
+        if (!s.driving && !s.air && s.walked > (s.swim ? 1.1 : running ? 1.6 : 1.35)) { s.walked = 0; if (s.swim) { sfx.splash(); burst(new THREE.Vector3(s.x - Math.sin(s.face) * 0.6, 0.1, s.z - Math.cos(s.face) * 0.6), 5, PARTMAT.glass, 1.8); } else sfx.step(groundKind(s.x, s.z)); }
       }
       s.speedNow = Math.hypot(s.x - s.px, s.z - s.pz) / dt;
       // time and needs
       s.hour += 24 / tune.day_length * dt;
-      s.hunger = Math.max(0, s.hunger - tune.hunger_drain / 60 * dt);
+      s.hunger = Math.max(0, s.hunger - tune.hunger_drain * (s.swim ? tune.swim_hunger_mult : 1) / 60 * dt);
+      s.swimK = (s.swimK || 0) + ((s.swim && !s.driving ? 1 : 0) - (s.swimK || 0)) * Math.min(1, 4 * dt);
       s.thirst = Math.max(0, s.thirst - tune.thirst_drain * (running ? tune.run_thirst_mult : 1) * (s.sick > 0 ? 1.5 : 1) / 60 * dt);
       let dmg = 0;
       if (s.hunger <= 0) dmg += tune.starve_damage;
@@ -2219,7 +2296,7 @@ const scenes = {
         if (Math.hypot(f.x - s.x, f.z - s.z) < 25) say('A fogueira apagou.');
       }
       if (pressed('KeyF')) { s.flash = !s.flash; sfx.click(); }
-      stepGuns(dt); stepParticles(dt); stepAnimals(dt); if (s.pickAnim > 0) s.pickAnim -= dt;
+      stepGuns(dt); stepParticles(dt); stepAnimals(dt); stepLogs(dt); if (s.pickAnim > 0) s.pickAnim -= dt;
       if (!s.driving && s.speedNow > 4.5 && Math.floor(s.t * 60) % 20 === 0) makeNoise(s.x, s.z, 22);
       // search
       placeCamera();
@@ -2257,12 +2334,20 @@ const scenes = {
       } else s.skin = null;
       const tr = c || s.act || s.driving || carc ? null : aimTree(); s.tree = tr;
       if (tr && down.has('KeyE')) {
-        if (!s.chop || s.chop.t !== tr) s.chop = { t: tr, p: 0, n: 0 };
-        s.chop.p += dt / tune.chop_time;
-        if (s.chop.p * 5 > s.chop.n) { s.chop.n++; sfx.chop(); }
-        s.face = lerpAngle(s.face, Math.atan2(-(tr.x - s.x), -(tr.z - s.z)), Math.min(1, 10 * dt));
-        if (s.chop.p >= 1) { s.chop = null; if (addItem('lenha')) { say('Pegou: Lenha'); sfx.pick(); } else { say('Mochila cheia: sem espaço para a lenha.'); sfx.empty(); } }
-      } else s.chop = null;
+        if (!s.chop || s.chop.t !== tr) s.chop = { t: tr, p: 0, swing: 0, hits: s.chopHold && s.chopHold.t === tr ? s.chopHold.hits : 0, struck: false };
+        const ch = s.chop; ch.swing += dt / tune.swing_time;
+        if (!ch.struck && ch.swing > 0.62) { // the blade bites
+          ch.struck = true; ch.hits++; sfx.axe(); makeNoise(s.x, s.z, 30);
+          burst(new THREE.Vector3(tr.x - Math.sin(s.face) * -0.3, 1.0, tr.z - Math.cos(s.face) * -0.3), 6, PARTMAT.wood, 2);
+          if (ch.hits >= tune.tree_hits) {
+            fellTree(tr, s.x, s.z); s.chop = null; let got = 0;
+            for (let i = 0; i < tune.tree_wood; i++) if (addItem('lenha')) got++;
+            say(got ? `A árvore caiu! Pegou ${got} × Lenha` + (got < tune.tree_wood ? ' (mochila cheia)' : '') : 'A árvore caiu, mas a mochila está cheia.');
+          }
+        }
+        if (s.chop && ch.swing >= 1) { ch.swing = 0; ch.struck = false; }
+        if (s.chop) { ch.p = (ch.hits + ch.swing) / tune.tree_hits; s.face = lerpAngle(s.face, Math.atan2(-(tr.x - s.x), -(tr.z - s.z)), Math.min(1, 10 * dt)); }
+      } else if (s.chop && !down.has('KeyE')) s.chopHold = s.chop, s.chop = null;
       s.crouch += ((s.search || s.skin ? 1 : 0) - s.crouch) * Math.min(1, 10 * dt);
       if (s.search) { const p = s.search.c.group.position; s.face = lerpAngle(s.face, Math.atan2(-(p.x - s.x), -(p.z - s.z)), Math.min(1, 10 * dt)); }
       for (const m of s.msgs) m.life -= dt;
@@ -2486,11 +2571,11 @@ function drawHud(day) {
   } else if (s.carcass) {
     shadowText(`${TOUCH ? 'Segure VASCULHAR' : 'Segure E'}: esfolar ${AN[s.carcass.kind].name}`, W / 2, H / 2 + 48, 20, '#fff');
   } else if (s.chop) {
-    shadowText('Cortando lenha…', W / 2, H / 2 + 48, 20, '#fff');
+    shadowText(`Cortando a árvore: golpe ${Math.min(tune.tree_hits, s.chop.hits + 1)} de ${tune.tree_hits}`, W / 2, H / 2 + 48, 20, '#fff');
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(W / 2 - 90, H / 2 + 66, 180, 8);
     ctx.fillStyle = '#c9a06a'; ctx.fillRect(W / 2 - 90, H / 2 + 66, 180 * Math.min(1, s.chop.p), 8);
   } else if (s.tree && !s.aim) {
-    shadowText(TOUCH ? 'Segure VASCULHAR: cortar lenha' : 'Segure E: cortar lenha', W / 2, H / 2 + 48, 20, '#fff');
+    shadowText(TOUCH ? 'Segure VASCULHAR: derrubar a árvore' : 'Segure E: derrubar a árvore com o machado', W / 2, H / 2 + 48, 20, '#fff');
   } else if (!s.aim && !s.craftOpen && nearFire()) {
     shadowText(`Fogueira acesa  ·  ${TOUCH ? 'FABRICAR' : 'C'}: cozinhar`, W / 2, H / 2 + 48, 18, '#ffd9a8');
   } else if (s.aim) {
@@ -2615,6 +2700,7 @@ window.game = {
   get events() { return events; },
   houses, containers, trees, fires, RECIPES, cars, props, doors, pumps, playerBody, phys,
   get size() { return [W, H]; },
+  logs, lakes,
   animals, GUNS, camera,
   teleport(x, z, yaw) { playerBody.position.set(x, 0.05, z); playerBody.velocity.setZero(); state.x = state.px = x; state.z = state.pz = z; if (yaw !== undefined) state.yaw = yaw; updateChunks(); },
   chunks, updateChunks, get drawCalls() { return renderer.info.render.calls; }, get aimCount() { return aimTargets.length; },
