@@ -73,6 +73,12 @@ window.CONFIG = {
   can_fuel: { value: 40, min: 5, max: 100, step: 5 },           // % que um galão põe no tanque
   car_start_fuel_max: { value: 30, min: 0, max: 100, step: 5 }, // cada carro começa com 0 até isto %
 
+  // --- Armas ---
+  ammo_stack: { value: 60, min: 10, max: 200, step: 5 },        // balas por espaço da mochila
+  ammo_chance: { value: 0.3, min: 0, max: 1, step: 0.05 },      // chance de um armário ter munição
+  gun_find_mult: { value: 1, min: 0, max: 5, step: 0.1 },       // multiplica a chance de achar armas
+  max_decals: { value: 80, min: 10, max: 300, step: 10 },       // marcas de tiro no mundo
+
   // --- Câmera em terceira pessoa ---
   cam_distance: { value: 2.8, min: 1, max: 6, step: 0.1 },    // m atrás do personagem
   cam_shoulder: { value: 0.55, min: -1.5, max: 1.5, step: 0.05 }, // m para o lado (positivo: ombro direito)
@@ -96,6 +102,16 @@ window.CONFIG = {
   fog_night_far: { value: 50, min: 15, max: 150, step: 5 },   // m à noite
 
   volume: { value: 0.5, min: 0, max: 1, step: 0.05 },
+
+  // Armas: carregador (mag), dano, tempo entre tiros (s), abertura (rad), alcance (m), recarga (s),
+  // chumbos por tiro, força do impacto, coice (rad), raio do barulho (m), chance de achar por móvel,
+  // balas por achado [mín, máx]; auto = segura o gatilho; zoom = campo de visão com luneta.
+  guns: {
+    pistola: { mag: 25, damage: 28, rate: 0.22, spread: 0.018, range: 70, reload: 1.4, pellets: 1, force: 3, recoil: 0.025, noise: 120, find: 0.035, ammo_find: [8, 20] },
+    escopeta: { mag: 12, damage: 14, rate: 0.85, spread: 0.07, range: 30, reload: 2.6, pellets: 8, force: 2, recoil: 0.09, noise: 160, find: 0.02, ammo_find: [4, 10] },
+    sniper: { mag: 6, damage: 140, rate: 1.4, spread: 0.002, range: 400, reload: 2.8, pellets: 1, force: 8, recoil: 0.12, noise: 300, find: 0.008, ammo_find: [3, 8], zoom: 14 },
+    fuzil: { mag: 30, damage: 32, rate: 0.1, spread: 0.022, range: 150, reload: 2.2, pellets: 1, force: 4, recoil: 0.03, noise: 200, find: 0.012, ammo_find: [10, 30], auto: true },
+  },
 
   // Tabelas de saque por tipo de móvel: [item, peso], e quantos itens (mín..máx).
   loot: {
